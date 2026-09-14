@@ -1,0 +1,16 @@
+[Unit]
+Description=EO Control Jetson Service
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=jetson
+WorkingDirectory=/opt/eo-control/jetson-service
+ExecStart=/opt/eo-control/jetson-service/.venv/bin/python -m eos_service --config /opt/eo-control/jetson-service/config.yaml
+Restart=on-failure
+RestartSec=3
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=multi-user.target

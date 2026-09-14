@@ -1,0 +1,87 @@
+# EO Control — Jetson Orin Nano service
+host: 0.0.0.0
+port: 8765
+sim: false
+
+platform:
+  # mast | uav
+  role: mast
+  height_m: 12.0
+  default_lat: 21.0285
+  default_lon: 105.8542
+  default_alt: 18.0
+  default_heading: 0.0
+
+cameras:
+  visible:
+    device: 0
+    width: 1280
+    height: 720
+    fps: 15
+    backend: auto
+  thermal:
+    # EasyCap (SATIS analog) — Windows: DirectShow index 1
+    device: 1
+    width: 640
+    height: 512
+    fps: 15
+    backend: dshow
+    colormap: false
+    # rtsp: rtsp://192.168.1.64:554/stream1
+
+# Zoom SATIS qua RS422 (ICD TR_IN_OP_FOV)
+satis:
+  enabled: true
+  port: COM25          # Jetson: /dev/ttyUSB1
+  baud: 9600
+  parity: even
+  zoom_speed: 0.5      # 0.3 .. 1.3
+  fov_set_point: 0.10  # rad — chỉnh theo NFOV/WFOV thật
+  zoom_pulse_s: 0.35
+
+ptz:
+  protocol: pelco_d   # pelco_d | sim
+  port: /dev/ttyUSB1
+  baud: 2400
+  address: 1
+  pan_min: -180
+  pan_max: 180
+  tilt_min: -45
+  tilt_max: 45
+  pan_speed: 12.0
+  tilt_speed: 8.0
+
+# LRF 7047
+laser:
+  port: COM26          # Jetson: /dev/ttyUSB0
+  baud: 57600
+  protocol: lrf7047    # lrf7047 | generic | lightware | sim
+  parity: even
+  measure_cmd: LM,Md,3
+  measure_interval_s: 0.8
+
+gps:
+  port: /dev/ttyUSB2
+  baud: 9600
+
+compass:
+  source: gps         # gps | serial | sim
+  port: /dev/ttyUSB3
+  baud: 9600
+
+ai:
+  model: yolov8n.pt
+  device: 0
+  conf: 0.4
+  imgsz: 640
+  classes: [0, 1, 2, 3, 5, 7]
+  use_ultralytics: true
+
+optics:
+  fov_h_1x: 60.0
+  zoom_min: 1.0
+  zoom_max: 30.0
+
+record:
+  dir: data/recordings
+  fourcc: mp4v
