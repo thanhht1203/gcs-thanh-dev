@@ -31,6 +31,8 @@ Nếu không mở được serial, service tự chuyển kênh đó sang sim.
 python -m eos_service --config config.yaml
 ```
 
+Cấu hình có thể chỉnh từ GCS (nút **Cấu hình**): ghi `config.yaml` và hot-apply (mở lại camera/serial) không cần restart process. Đổi `host`/`port` vẫn cần restart service.
+
 Trên Jetson đổi `COM25`/`COM26` → `/dev/ttyUSBx`.
 
 ## Jetson + YOLO

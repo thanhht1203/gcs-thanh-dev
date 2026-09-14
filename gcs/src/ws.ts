@@ -2,11 +2,58 @@ import { useEffect, useRef } from "react";
 import { useStore } from "./store";
 import type { Telemetry } from "./types";
 
+type Pending = {
+  resolve: (v: unknown) => void;
+  reject: (e: Error) => void;
+  timer: number;
+};
+
+const pendingConfig = new Map<string, Pending>();
+
 export function send(obj: unknown) {
   const ws = wsRef.current;
   if (ws && ws.readyState === WebSocket.OPEN) {
     ws.send(JSON.stringify(obj));
+    return true;
   }
+  return false;
+}
+
+/** Gửi lệnh config và chờ phản hồi (requestId). */
+export function requestConfig(action: "get" | "set", config?: Record<string, unknown>, persist = true) {
+  const requestId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  return new Promise<Record<string, unknown>>((resolve, reject) => {
+    if (!send({ type: "config", action, config, persist, requestId })) {
+      reject(new Error("Chưa kết nối Jetson"));
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      pendingConfig.delete(requestId);
+      reject(new Error("Hết thời gian chờ phản hồi config"));
+    }, 15000);
+    pendingConfig.set(requestId, {
+      resolve: (v) => resolve(v as Record<string, unknown>),
+      reject,
+      timer,
+    });
+  });
+}
+
+function settleConfig(msg: Record<string, unknown>) {
+  const requestId = typeof msg.requestId === "string" ? msg.requestId : null;
+  // resolve oldest pending if server chưa echo requestId
+  const key = requestId && pendingConfig.has(requestId) ? requestId : [...pendingConfig.keys()][0];
+  if (!key) {
+    useStore.getState().setJetsonConfig((msg.config as Record<string, unknown>) || null);
+    return;
+  }
+  const p = pendingConfig.get(key);
+  if (!p) return;
+  pendingConfig.delete(key);
+  window.clearTimeout(p.timer);
+  useStore.getState().setJetsonConfig((msg.config as Record<string, unknown>) || null);
+  if (msg.ok === false) p.reject(new Error(String(msg.error || "Config lỗi")));
+  else p.resolve(msg);
 }
 
 const wsRef: { current: WebSocket | null } = { current: null };
@@ -51,9 +98,7 @@ export function useJetsonSocket() {
           try {
             const msg = JSON.parse(ev.data);
             if (msg.type === "telemetry") setTelemetry(msg as Telemetry);
-            if (msg.type === "photo" && msg.path) {
-              /* Jetson saved a still; GCS also keeps the on-screen frame via snapshot button */
-            }
+            else if (msg.type === "config") settleConfig(msg);
           } catch {
             /* ignore */
           }

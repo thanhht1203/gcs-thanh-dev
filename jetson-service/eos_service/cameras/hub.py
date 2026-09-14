@@ -158,5 +158,19 @@ class CameraHub:
     def close(self) -> None:
         if self._vis_src:
             self._vis_src.close()
+            self._vis_src = None
         if self._th_src:
             self._th_src.close()
+            self._th_src = None
+
+    def reconfigure(self, settings: Settings, webcam: bool | None = None) -> None:
+        """Đóng và mở lại camera theo config mới (hot-apply)."""
+        if webcam is not None:
+            self.webcam = webcam
+        self.close()
+        self.settings = settings
+        if not settings.sim:
+            self._vis_src = OpenCvSource(settings.cameras.visible)
+            self._th_src = OpenCvSource(settings.cameras.thermal)
+        elif self.webcam:
+            self._vis_src = OpenCvSource(settings.cameras.visible)

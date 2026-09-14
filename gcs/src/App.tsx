@@ -1,10 +1,11 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { VideoStage } from "./components/VideoStage";
 import { MapPanel } from "./components/MapPanel";
 import { PtzPanel } from "./components/PtzPanel";
 import { CameraPanel } from "./components/CameraPanel";
 import { AiPanel } from "./components/AiPanel";
 import { RecordPanel } from "./components/RecordPanel";
+import { SettingsModal } from "./components/SettingsModal";
 import { useHotkeys } from "./hooks/useHotkeys";
 import { useStore } from "./store";
 import { send, useJetsonSocket } from "./ws";
@@ -16,6 +17,8 @@ export default function App() {
   const connected = useStore((s) => s.connected);
   const url = useStore((s) => s.url);
   const setUrl = useStore((s) => s.setUrl);
+  const layout = useStore((s) => s.layout);
+  const setSettingsOpen = useStore((s) => s.setSettingsOpen);
   const tel = useStore((s) => s.telemetry);
   const vis = useStore((s) => s.visibleUrl);
   const ir = useStore((s) => s.thermalUrl);
@@ -23,11 +26,23 @@ export default function App() {
   const setMain = useStore((s) => s.setMainView);
   const [draft, setDraft] = useState(url);
 
+  useEffect(() => {
+    setDraft(url);
+  }, [url]);
+
   const mainSrc = main === "visible" ? vis : ir;
   const pipSrc = main === "visible" ? ir : vis;
 
   return (
-    <div className="app">
+    <div
+      className="app"
+      style={
+        {
+          "--sidebar-w": `${layout.sidebarWidth}px`,
+          "--bottom-h": `${layout.bottomHeight}px`,
+        } as React.CSSProperties
+      }
+    >
       <header className="top">
         <div className="brand">
           <span className="mark" />
@@ -43,6 +58,9 @@ export default function App() {
             onBlur={() => setUrl(draft)}
             onKeyDown={(e) => e.key === "Enter" && setUrl(draft)}
           />
+          <button className="ghost" onClick={() => setSettingsOpen(true)} title="Cấu hình">
+            Cấu hình
+          </button>
         </div>
         <div className="chips">
           <span>{tel.gps.fix ? `GPS ${tel.gps.lat.toFixed(5)} ${tel.gps.lon.toFixed(5)}` : "GPS --"}</span>
@@ -61,14 +79,16 @@ export default function App() {
             label={main === "visible" ? "ẢNH THƯỜNG" : "ẢNH NHIỆT"}
           />
           <div className="bottom">
-            <div className="pip" onClick={() => setMain(main === "visible" ? "thermal" : "visible")}>
-              <VideoStage
-                src={pipSrc}
-                thermal={main === "visible"}
-                label={main === "visible" ? "ẢNH NHIỆT" : "ẢNH THƯỜNG"}
-              />
-            </div>
-            <MapPanel />
+            {layout.showPip && (
+              <div className="pip" onClick={() => setMain(main === "visible" ? "thermal" : "visible")}>
+                <VideoStage
+                  src={pipSrc}
+                  thermal={main === "visible"}
+                  label={main === "visible" ? "ẢNH NHIỆT" : "ẢNH THƯỜNG"}
+                />
+              </div>
+            )}
+            {layout.showMap && <MapPanel />}
           </div>
         </div>
         <aside className="col-side">
@@ -111,6 +131,8 @@ export default function App() {
           2 Ảnh nhiệt
         </button>
       </footer>
+
+      <SettingsModal />
     </div>
   );
 }

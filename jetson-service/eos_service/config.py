@@ -134,12 +134,54 @@ def load_settings(path: str | None = None, sim_override: bool | None = None) -> 
         settings.sim = sim_override
     if os.environ.get("EOS_SIM") == "1":
         settings.sim = True
-    rec = Path(settings.record.dir)
+    settings.record.dir = str(_resolve_record_dir(settings.record.dir))
+    return settings
+
+
+def _resolve_record_dir(dir_path: str) -> Path:
+    rec = Path(dir_path)
     if not rec.is_absolute():
         rec = ROOT / rec
     rec.mkdir(parents=True, exist_ok=True)
-    settings.record.dir = str(rec)
-    return settings
+    return rec
+
+
+def settings_to_dict(settings: Settings) -> dict[str, Any]:
+    """Xuất dict để gửi GCS / ghi YAML (record.dir ưu tiên relative nếu nằm trong ROOT)."""
+    data = settings.model_dump(mode="python")
+    rec = Path(str(data.get("record", {}).get("dir", "data/recordings")))
+    try:
+        if rec.is_absolute():
+            data["record"]["dir"] = str(rec.relative_to(ROOT)).replace("\\", "/")
+    except ValueError:
+        data["record"]["dir"] = str(rec).replace("\\", "/")
+    return data
+
+
+def save_settings(settings: Settings, path: str | Path) -> Path:
+    cfg_path = Path(path)
+    cfg_path.parent.mkdir(parents=True, exist_ok=True)
+    data = settings_to_dict(settings)
+    with open(cfg_path, "w", encoding="utf-8") as f:
+        yaml.safe_dump(data, f, allow_unicode=True, sort_keys=False, default_flow_style=False)
+    return cfg_path
+
+
+def merge_settings(base: Settings, patch: dict[str, Any]) -> Settings:
+    """Deep-merge patch dict vào Settings hiện tại."""
+    current = settings_to_dict(base)
+    _deep_merge(current, patch)
+    merged = Settings.model_validate(current)
+    merged.record.dir = str(_resolve_record_dir(merged.record.dir))
+    return merged
+
+
+def _deep_merge(dst: dict[str, Any], src: dict[str, Any]) -> None:
+    for key, val in src.items():
+        if isinstance(val, dict) and isinstance(dst.get(key), dict):
+            _deep_merge(dst[key], val)
+        else:
+            dst[key] = val
 
 
 def parse_cli() -> argparse.Namespace:

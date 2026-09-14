@@ -84,13 +84,13 @@
 
 .body {
   display: grid;
-  grid-template-columns: 1fr 320px;
+  grid-template-columns: 1fr var(--sidebar-w, 320px);
   min-height: 0;
 }
 
 .col-main {
   display: grid;
-  grid-template-rows: 1fr 240px;
+  grid-template-rows: 1fr var(--bottom-h, 240px);
   min-height: 0;
   min-width: 0;
   padding: 10px;
@@ -99,9 +99,14 @@
 
 .bottom {
   display: grid;
-  grid-template-columns: 320px 1fr;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr);
   gap: 10px;
   min-height: 0;
+}
+
+.bottom:has(.pip:only-child),
+.bottom:has(.map-wrap:only-child) {
+  grid-template-columns: 1fr;
 }
 
 .pip {
@@ -458,3 +463,118 @@ button.ghost {
   color: var(--danger);
   border-color: var(--danger);
 }
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  background: rgba(0, 0, 0, 0.55);
+  display: grid;
+  place-items: center;
+  padding: 20px;
+}
+
+.modal {
+  width: min(860px, 100%);
+  max-height: min(90vh, 820px);
+  display: grid;
+  grid-template-rows: auto auto 1fr auto;
+  background: #0d131a;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.45);
+}
+
+.modal-head,
+.modal-foot {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--line);
+}
+
+.modal-foot {
+  border-bottom: none;
+  border-top: 1px solid var(--line);
+}
+
+.modal-head h2 {
+  margin: 0;
+  font-size: 13px;
+  letter-spacing: 0.14em;
+  font-family: var(--mono);
+  color: var(--accent);
+}
+
+.settings-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 10px 14px 0;
+}
+
+.settings-tabs button {
+  font-size: 12px;
+  padding: 6px 10px;
+}
+
+.settings-body {
+  overflow: auto;
+  padding: 12px 14px 16px;
+  min-height: 0;
+}
+
+.cfg-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 14px;
+}
+
+.cfg-grid h4 {
+  grid-column: 1 / -1;
+  margin: 10px 0 0;
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  color: var(--accent);
+  font-family: var(--mono);
+}
+
+.cfg-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--muted);
+  margin: 0;
+}
+
+.cfg-field input,
+.cfg-field select {
+  width: 100%;
+  background: #0a0e13;
+  border: 1px solid var(--line);
+  color: var(--text);
+  padding: 6px 8px;
+  border-radius: 4px;
+}
+
+.cfg-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text);
+  margin: 4px 0;
+}
+
+.modal-foot .grow {
+  flex: 1;
+}
+
+@media (max-width: 720px) {
+  .cfg-grid {
+    grid-template-columns: 1fr;
+  }
+}
+

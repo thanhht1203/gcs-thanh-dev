@@ -129,3 +129,12 @@ class SatisController:
             except Exception:
                 pass
             self._ser = None
+
+    def reconfigure(self, cfg: SatisCfg, sim: bool) -> None:
+        self.close()
+        self.cfg = cfg
+        self.sim = sim or not cfg.enabled
+        self._active = False
+        self._stop_at = 0.0
+        if not self.sim:
+            self._open()

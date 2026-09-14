@@ -39,7 +39,8 @@ export function AiPanel() {
         </button>
       </div>
       <p className="hint">
-        Click trên video để bám. Kéo chuột (chế độ khoanh vùng) để tìm trong ROI. T = bám gần tâm, Esc = dừng.
+        Click trên video để bám. Kéo chuột (khoanh vùng) để khóa mục tiêu trong ROI — bbox/ROI sẽ đi theo khi đối tượng
+        di chuyển. T = bám gần tâm, Esc = dừng.
       </p>
       <ul className="dets">
         {tel.detections.slice(0, 8).map((d) => (

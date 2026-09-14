@@ -58,16 +58,35 @@ class LaserRangefinder:
         self._last_trigger = 0.0
         self._lock = threading.Lock()
         if not self.sim:
-            parity = getattr(cfg, "parity", "even" if cfg.protocol == "lrf7047" else "none")
-            self._ser = _try_serial(cfg.port, cfg.baud, parity=parity)
-            if self._ser is None:
-                self.sim = True
-            else:
-                print(f"[laser] {cfg.protocol} mở {cfg.port} @ {cfg.baud}")
-                try:
-                    self._ser.reset_input_buffer()
-                except Exception:
-                    pass
+            self._open()
+
+    def _open(self) -> None:
+        parity = getattr(self.cfg, "parity", "even" if self.cfg.protocol == "lrf7047" else "none")
+        self._ser = _try_serial(self.cfg.port, self.cfg.baud, parity=parity)
+        if self._ser is None:
+            self.sim = True
+        else:
+            print(f"[laser] {self.cfg.protocol} mở {self.cfg.port} @ {self.cfg.baud}")
+            try:
+                self._ser.reset_input_buffer()
+            except Exception:
+                pass
+
+    def close(self) -> None:
+        if self._ser is not None:
+            try:
+                self._ser.close()
+            except Exception:
+                pass
+            self._ser = None
+
+    def reconfigure(self, cfg, sim: bool) -> None:
+        self.close()
+        self.cfg = cfg
+        self.sim = sim or cfg.protocol == "sim"
+        self._buf = ""
+        if not self.sim:
+            self._open()
 
     # ----- LRF 7047 helpers -----
     @staticmethod
@@ -232,12 +251,46 @@ class GpsCompass:
             fix=True if sim else False,
         )
         self.heading = settings.platform.default_heading
-        self._gps_ser = None if sim else _try_serial(settings.gps.port, settings.gps.baud)
+        self._gps_ser = None
         self._cmp_ser = None
-        if not sim and settings.compass.source == "serial":
-            self._cmp_ser = _try_serial(settings.compass.port, settings.compass.baud)
         self._buf = b""
         self._lock = threading.Lock()
+        if not sim:
+            self._open()
+
+    def _open(self) -> None:
+        self._gps_ser = _try_serial(self.settings.gps.port, self.settings.gps.baud)
+        self._cmp_ser = None
+        if self.settings.compass.source == "serial":
+            self._cmp_ser = _try_serial(self.settings.compass.port, self.settings.compass.baud)
+
+    def close(self) -> None:
+        for ser in (self._gps_ser, self._cmp_ser):
+            if ser is None:
+                continue
+            try:
+                ser.close()
+            except Exception:
+                pass
+        self._gps_ser = None
+        self._cmp_ser = None
+        self._buf = b""
+
+    def reconfigure(self, settings: Settings, sim: bool) -> None:
+        self.close()
+        self.settings = settings
+        self.sim = sim
+        with self._lock:
+            if sim or not self.fix.fix:
+                self.fix = GpsFix(
+                    lat=settings.platform.default_lat,
+                    lon=settings.platform.default_lon,
+                    alt=settings.platform.default_alt,
+                    fix=True if sim else False,
+                )
+                self.heading = settings.platform.default_heading
+        if not sim:
+            self._open()
 
     def poll(self) -> None:
         if self.sim:

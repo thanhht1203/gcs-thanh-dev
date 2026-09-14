@@ -74,11 +74,33 @@ BBox `x,y,w,h` chuẩn hóa 0–1 theo khung hình.
 {"type": "record", "action": "photo", "save_to": "both"}
 {"type": "record", "action": "start"}
 {"type": "record", "action": "stop"}
+
+{"type": "config", "action": "get", "requestId": "optional"}
+{"type": "config", "action": "set", "persist": true, "requestId": "optional", "config": { "...": "partial hoặc đầy đủ fields như config.yaml" }}
 ```
+
+Phản hồi config:
+
+```json
+{
+  "type": "config",
+  "ok": true,
+  "applied": true,
+  "saved": true,
+  "path": "config.yaml",
+  "config": { },
+  "warnings": ["host/port đã lưu; cần restart service để đổi cổng lắng nghe"],
+  "requestId": "optional"
+}
+```
+
+`action: set` ghi `config.yaml` (nếu `persist: true`) rồi **hot-apply**: đóng/mở lại camera, PTZ, laser, SATIS, GPS, AI — không restart process.
 
 ## HTTP phụ
 
 - `GET /health`
+- `GET /config` — đọc cấu hình hiện tại
+- `PUT /config` — body `{ "config": {...}, "persist": true }` (hot-apply)
 - `GET /snapshot/visible`
 - `GET /snapshot/thermal`
 - `GET /recordings` — danh sách file trên Jetson

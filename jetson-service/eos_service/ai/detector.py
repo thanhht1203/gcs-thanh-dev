@@ -23,19 +23,39 @@ class Detector:
         self.sim = sim
         self.model = None
         self.ok = False
-        if sim:
-            return
-        if not cfg.use_ultralytics:
+        if not sim:
+            self._load()
+
+    def _load(self) -> None:
+        self.model = None
+        self.ok = False
+        if not self.cfg.use_ultralytics:
             return
         try:
             from ultralytics import YOLO
 
-            self.model = YOLO(cfg.model)
+            self.model = YOLO(self.cfg.model)
             self.ok = True
-            print(f"[ai] Loaded {cfg.model}")
+            print(f"[ai] Loaded {self.cfg.model}")
         except Exception as exc:
             print(f"[ai] Không tải được YOLO ({exc}). Dùng detector rỗng.")
             self.model = None
+
+    def reconfigure(self, cfg: AiCfg, sim: bool) -> None:
+        need_reload = (
+            sim != self.sim
+            or cfg.model != self.cfg.model
+            or cfg.use_ultralytics != self.cfg.use_ultralytics
+            or cfg.device != self.cfg.device
+        )
+        self.cfg = cfg
+        self.sim = sim
+        if sim:
+            self.model = None
+            self.ok = False
+            return
+        if need_reload:
+            self._load()
 
     def infer(self, frame: np.ndarray, roi: tuple[float, float, float, float] | None) -> list[Detection]:
         if self.model is None or frame is None:

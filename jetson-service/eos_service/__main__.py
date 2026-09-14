@@ -14,7 +14,7 @@ def main() -> None:
     if args.port:
         settings.port = args.port
     print(f"EO service  http://{settings.host}:{settings.port}  sim={settings.sim}")
-    engine = Engine(settings, webcam=args.webcam)
+    engine = Engine(settings, webcam=args.webcam, config_path=args.config)
     app = create_app(engine)
     uvicorn.run(app, host=settings.host, port=settings.port, log_level="info")
 

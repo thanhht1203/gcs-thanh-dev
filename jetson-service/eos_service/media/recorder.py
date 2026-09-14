@@ -49,3 +49,12 @@ class Recorder:
             if p.suffix.lower() in {".jpg", ".jpeg", ".png", ".mp4", ".avi"}:
                 items.append({"name": p.name, "size": p.stat().st_size, "mtime": p.stat().st_mtime})
         return items[:200]
+
+    def reconfigure(self, directory: str, fourcc: str) -> None:
+        was_recording = self.writer is not None
+        self.stop()
+        self.dir = Path(directory)
+        self.dir.mkdir(parents=True, exist_ok=True)
+        self.fourcc = fourcc
+        if was_recording:
+            print("[record] Đã dừng ghi hình do đổi thư mục/config")

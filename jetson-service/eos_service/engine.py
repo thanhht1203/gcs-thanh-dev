@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import threading
 import time
 from pathlib import Path
 from typing import Any
@@ -15,13 +16,13 @@ from fastapi.responses import FileResponse, JSONResponse, Response
 from .ai.detector import Detector, keep_track, pick_nearest
 from .cameras.hub import CameraHub
 from .cameras.satis import SatisController
-from .config import Settings
+from .config import Settings, merge_settings, save_settings, settings_to_dict
 from .geo import compute_fov, target_geolocation
 from .media.recorder import Recorder
 from .ptz.controller import PtzController
 from .sensors.devices import GpsCompass, LaserRangefinder
 from .sim.world import SimWorld
-from .state import SystemState
+from .state import Detection, SystemState
 
 
 JPEG_QUALITY = 75
@@ -29,9 +30,35 @@ STREAM_VISIBLE = 0
 STREAM_THERMAL = 1
 
 
+def _center_in_roi(d: Detection, roi: tuple[float, float, float, float]) -> bool:
+    rx, ry, rw, rh = roi
+    cx = d.x + d.w / 2
+    cy = d.y + d.h / 2
+    return rx <= cx <= rx + rw and ry <= cy <= ry + rh
+
+
+def _follow_roi(d: Detection, pad: float = 0.35) -> tuple[float, float, float, float]:
+    """Mở rộng bbox mục tiêu thành ROI theo dõi (chuẩn hóa 0–1)."""
+    pw = d.w * (1.0 + pad)
+    ph = d.h * (1.0 + pad)
+    pw = max(pw, 0.06)
+    ph = max(ph, 0.08)
+    cx = d.x + d.w / 2
+    cy = d.y + d.h / 2
+    x = max(0.0, min(1.0 - pw, cx - pw / 2))
+    y = max(0.0, min(1.0 - ph, cy - ph / 2))
+    if x + pw > 1.0:
+        pw = 1.0 - x
+    if y + ph > 1.0:
+        ph = 1.0 - y
+    return (x, y, pw, ph)
+
+
 class Engine:
-    def __init__(self, settings: Settings, webcam: bool = False):
+    def __init__(self, settings: Settings, webcam: bool = False, config_path: str | Path | None = None):
         self.settings = settings
+        self.config_path = Path(config_path) if config_path else Path("config.yaml")
+        self.webcam = webcam
         self.state = SystemState(sim=settings.sim)
         self.state.camera.quality = "720p" if settings.sim else "1080p"
         self.state.camera.fps = settings.cameras.visible.fps
@@ -46,6 +73,7 @@ class Engine:
         self.clients: set[WebSocket] = set()
         self._stop = asyncio.Event()
         self._last_tick = time.perf_counter()
+        self._apply_lock = threading.Lock()
 
     async def loop(self) -> None:
         while not self._stop.is_set():
@@ -80,6 +108,10 @@ class Engine:
             await asyncio.sleep(max(0.0, 1.0 / fps - elapsed))
 
     def _step(self, dt: float) -> None:
+        with self._apply_lock:
+            self._step_locked(dt)
+
+    def _step_locked(self, dt: float) -> None:
         pan, tilt = self.ptz.tick(dt)
         self.state.pan, self.state.tilt = pan, tilt
 
@@ -106,32 +138,38 @@ class Engine:
 
         dets = []
         if self.state.detect_on:
+            # Khi đang bám: detect cả khung hình để ID không mất khi mục tiêu ra khỏi ROI cũ.
+            # ROI chỉ dùng làm cửa sổ tìm khi chưa khóa track.
+            use_roi = self.state.roi if (self.state.roi and not self.state.track_on) else None
             if self.settings.sim and not self.detector.ok:
                 dets = list(self.cameras.sim_dets)
-                if self.state.roi:
-                    rx, ry, rw, rh = self.state.roi
-                    dets = [
-                        d
-                        for d in dets
-                        if d.x + d.w / 2 >= rx
-                        and d.x + d.w / 2 <= rx + rw
-                        and d.y + d.h / 2 >= ry
-                        and d.y + d.h / 2 <= ry + rh
-                    ]
+                if use_roi:
+                    dets = [d for d in dets if _center_in_roi(d, use_roi)]
             else:
-                dets = self.detector.infer(vis, self.state.roi if self.state.roi else None)
+                dets = self.detector.infer(vis, use_roi)
                 if not dets and self.cameras.sim_dets:
                     dets = list(self.cameras.sim_dets)
+                    if use_roi:
+                        dets = [d for d in dets if _center_in_roi(d, use_roi)]
         self.state.detections = dets
 
         if self.state.track_on:
             tracked = keep_track(dets, self.state.track_id)
+            if tracked is None and self.state.roi:
+                # mất ID tạm thời → chọn lại trong vùng ROI đang theo
+                rx, ry, rw, rh = self.state.roi
+                tracked = pick_nearest(dets, rx + rw / 2, ry + rh / 2)
+                if tracked and _center_in_roi(tracked, self.state.roi):
+                    self.state.track_id = tracked.id
+                else:
+                    tracked = None
             if tracked is None and dets:
                 tracked = pick_nearest(dets, 0.5, 0.5)
                 if tracked:
                     self.state.track_id = tracked.id
             if tracked:
-                # auto-center mildly toward target
+                # ROI / bbox vùng bám đi theo mục tiêu
+                self.state.roi = _follow_roi(tracked, pad=0.35)
                 cx = tracked.x + tracked.w / 2
                 cy = tracked.y + tracked.h / 2
                 err_x = cx - 0.5
@@ -151,9 +189,115 @@ class Engine:
             self.settings.platform.height_m,
         )
 
+    def get_config_payload(self) -> dict[str, Any]:
+        return {
+            "type": "config",
+            "ok": True,
+            "path": str(self.config_path),
+            "config": settings_to_dict(self.settings),
+            "notes": {
+                "host_port": "host/port chỉ có hiệu lực sau khi khởi động lại service",
+            },
+        }
+
+    def apply_config(self, patch: dict[str, Any], *, persist: bool = True) -> dict[str, Any]:
+        """Ghi config (tuỳ chọn) và hot-apply thiết bị — không restart process."""
+        errors: list[str] = []
+        warnings: list[str] = []
+        try:
+            new_settings = merge_settings(self.settings, patch)
+        except Exception as exc:
+            return {
+                "type": "config",
+                "ok": False,
+                "error": f"Config không hợp lệ: {exc}",
+                "config": settings_to_dict(self.settings),
+            }
+
+        listen_host, listen_port = self.settings.host, self.settings.port
+        saved_host, saved_port = new_settings.host, new_settings.port
+        if saved_host != listen_host or saved_port != listen_port:
+            warnings.append("host/port đã lưu; cần restart service để đổi cổng lắng nghe")
+
+        with self._apply_lock:
+            try:
+                if persist:
+                    save_settings(new_settings, self.config_path)
+
+                sim_changed = new_settings.sim != self.settings.sim
+                self.settings = new_settings
+                self.state.sim = new_settings.sim
+
+                if new_settings.sim and self.world is None:
+                    self.world = SimWorld(height_m=new_settings.platform.height_m)
+                elif not new_settings.sim:
+                    self.world = None
+                elif self.world is not None:
+                    self.world.height_m = new_settings.platform.height_m
+
+                self.cameras.world = self.world
+                self.cameras.reconfigure(new_settings, webcam=self.webcam)
+                self.ptz.reconfigure(new_settings.ptz, new_settings.sim)
+                self.laser.reconfigure(new_settings.laser, new_settings.sim)
+                self.satis.reconfigure(new_settings.satis, new_settings.sim)
+                self.nav.reconfigure(new_settings, new_settings.sim)
+                self.detector.reconfigure(new_settings.ai, new_settings.sim)
+                self.recorder.reconfigure(new_settings.record.dir, new_settings.record.fourcc)
+                if self.state.recording:
+                    self.state.recording = False
+
+                # giữ host/port runtime (uvicorn đã bind)
+                self.settings.host = listen_host
+                self.settings.port = listen_port
+
+                if sim_changed:
+                    warnings.append("Đã đổi chế độ sim — thiết bị đã mở lại theo cấu hình mới")
+            except Exception as exc:
+                errors.append(str(exc))
+
+        ok = len(errors) == 0
+        cfg_out = settings_to_dict(self.settings)
+        if persist and ok:
+            cfg_out["host"] = saved_host
+            cfg_out["port"] = saved_port
+        return {
+            "type": "config",
+            "ok": ok,
+            "applied": ok,
+            "saved": persist and ok,
+            "path": str(self.config_path),
+            "config": cfg_out,
+            "errors": errors,
+            "warnings": warnings,
+        }
+
     async def handle_cmd(self, msg: dict[str, Any]) -> dict[str, Any] | None:
         t = msg.get("type")
         st = self.state
+        if t == "config":
+            action = msg.get("action", "get")
+            request_id = msg.get("requestId")
+            if action == "get":
+                payload = self.get_config_payload()
+                if request_id is not None:
+                    payload["requestId"] = request_id
+                return payload
+            if action in ("set", "apply"):
+                patch = msg.get("config")
+                if not isinstance(patch, dict):
+                    err = {"type": "config", "ok": False, "error": "Thiếu object config"}
+                    if request_id is not None:
+                        err["requestId"] = request_id
+                    return err
+                persist = bool(msg.get("persist", True))
+                payload = await asyncio.to_thread(self.apply_config, patch, persist=persist)
+                if request_id is not None:
+                    payload["requestId"] = request_id
+                return payload
+            err = {"type": "config", "ok": False, "error": f"action không hỗ trợ: {action}"}
+            if request_id is not None:
+                err["requestId"] = request_id
+            return err
         if t == "ptz":
             action = msg.get("action")
             if action == "nudge":
@@ -182,7 +326,6 @@ class Engine:
                 self.satis.zoom_stop()
             elif action == "set":
                 st.zoom = max(zmin, min(zmax, float(msg.get("value", 1))))
-                # map zoom UI → pulse in/out thô
                 mid = (zmin + zmax) / 2
                 if st.zoom >= mid:
                     self.satis.zoom_in(pulse_s=0.2)
@@ -242,12 +385,15 @@ class Engine:
                     float(msg.get("h", 0.2)),
                 )
                 st.detect_on = True
-                # bám object gần tâm ROI
+                # Ưu tiên detection hiện có trong ROI; nếu chưa có thì chờ frame sau
+                pool = st.detections or list(self.cameras.sim_dets)
+                in_roi = [d for d in pool if _center_in_roi(d, st.roi)]
                 rx, ry, rw, rh = st.roi
-                d = pick_nearest(st.detections, rx + rw / 2, ry + rh / 2)
+                d = pick_nearest(in_roi or pool, rx + rw / 2, ry + rh / 2)
                 if d:
                     st.track_id = d.id
                     st.track_on = True
+                    st.roi = _follow_roi(d, pad=0.35)
         elif t == "record":
             action = msg.get("action")
             vis = self.cameras.get_visible()
@@ -268,6 +414,9 @@ class Engine:
         self._stop.set()
         self.satis.close()
         self.cameras.close()
+        self.ptz.close()
+        self.laser.close()
+        self.nav.close()
         self.recorder.stop()
 
 
@@ -289,6 +438,17 @@ def create_app(engine: Engine) -> FastAPI:
     @app.get("/health")
     def health():
         return {"ok": True, "sim": engine.settings.sim, "clients": len(engine.clients)}
+
+    @app.get("/config")
+    def get_config():
+        return engine.get_config_payload()
+
+    @app.put("/config")
+    def put_config(body: dict[str, Any]):
+        patch = body.get("config", body)
+        if not isinstance(patch, dict):
+            return JSONResponse({"type": "config", "ok": False, "error": "body không hợp lệ"}, status_code=400)
+        return engine.apply_config(patch, persist=bool(body.get("persist", True)))
 
     @app.get("/snapshot/visible")
     def snap_vis():

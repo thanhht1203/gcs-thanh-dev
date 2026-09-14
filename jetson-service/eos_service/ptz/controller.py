@@ -24,9 +24,32 @@ class PtzController:
             import serial
 
             self._ser = serial.Serial(self.cfg.port, self.cfg.baud, timeout=0.05)
+            print(f"[ptz] mở {self.cfg.port} @ {self.cfg.baud}")
         except Exception as exc:
             print(f"[ptz] Không mở được {self.cfg.port}: {exc} — chuyển sim")
             self.sim = True
+            self._ser = None
+
+    def close(self) -> None:
+        if self._ser is not None:
+            try:
+                self._ser.close()
+            except Exception:
+                pass
+            self._ser = None
+
+    def reconfigure(self, cfg: PtzCfg, sim: bool) -> None:
+        pan, tilt = self.pan, self.tilt
+        self.close()
+        self.cfg = cfg
+        self.sim = sim or cfg.protocol == "sim"
+        self.pan = max(cfg.pan_min, min(cfg.pan_max, pan))
+        self.tilt = max(cfg.tilt_min, min(cfg.tilt_max, tilt))
+        self._cmd_pan = 0.0
+        self._cmd_tilt = 0.0
+        self._goto = None
+        if not self.sim:
+            self._open_serial()
 
     def nudge(self, pan: float, tilt: float, speed: float = 1.0) -> None:
         with self._lock:
