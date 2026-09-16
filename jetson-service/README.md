@@ -50,10 +50,11 @@ yolo export model=yolov8n.pt format=engine device=0
 # rồi đặt ai.model: yolov8n.engine trong config.yaml
 ```
 
-## systemd
+## Cập nhật code từ PC
 
-Copy `systemd/eo-service.service` tới `/etc/systemd/system/`, sửa User/WorkingDirectory, rồi:
-
-```bash
-sudo systemctl enable --now eo-service
+```bat
+REM Từ thư mục gốc repo trên Windows
+deploy-jetson.bat
 ```
+
+Chi tiết: xem README gốc (`../README.md` mục "Cập nhật code lên Jetson").

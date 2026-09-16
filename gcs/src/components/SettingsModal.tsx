@@ -53,7 +53,6 @@ export function SettingsModal() {
   const setLayout = useStore((s) => s.setLayout);
   const setMainView = useStore((s) => s.setMainView);
   const connected = useStore((s) => s.connected);
-  const jetsonConfig = useStore((s) => s.jetsonConfig);
   const setConfigStatus = useStore((s) => s.setConfigStatus);
 
   const [tab, setTab] = useState<Tab>("gcs");
@@ -61,28 +60,40 @@ export function SettingsModal() {
   const [layoutDraft, setLayoutDraft] = useState<GcsLayout>(layout);
   const [draft, setDraft] = useState<Record<string, unknown> | null>(null);
   const [busy, setBusy] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
 
+  // Chỉ load khi mở modal — không phụ thuộc jetsonConfig/layout (tránh reset checkbox/draft).
   useEffect(() => {
     if (!open) return;
-    setUrlDraft(url);
-    setLayoutDraft(layout);
+    let cancelled = false;
+    setUrlDraft(useStore.getState().url);
+    setLayoutDraft(useStore.getState().layout);
     setMsg(null);
-    if (connected) {
-      setBusy(true);
-      requestConfig("get")
-        .then((res) => {
-          setDraft((res.config as Record<string, unknown>) || {});
-          setMsg(null);
-        })
-        .catch((e: Error) => setMsg(e.message))
-        .finally(() => setBusy(false));
-    } else if (jetsonConfig) {
-      setDraft(structuredClone(jetsonConfig));
-    } else {
-      setDraft(null);
+    setDraft(null);
+
+    if (!useStore.getState().connected) {
+      setMsg("Chưa kết nối Jetson — vẫn lưu được tab GCS.");
+      return;
     }
-  }, [open, connected, url, layout, jetsonConfig]);
+
+    setBusy(true);
+    requestConfig("get")
+      .then((res) => {
+        if (cancelled) return;
+        setDraft((res.config as Record<string, unknown>) || {});
+      })
+      .catch((e: Error) => {
+        if (!cancelled) setMsg(e.message);
+      })
+      .finally(() => {
+        if (!cancelled) setBusy(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [open]);
 
   const setVal = (path: string, value: unknown) => {
     setDraft((prev) => (prev ? deepSet(prev, path, value) : prev));
@@ -121,22 +132,29 @@ export function SettingsModal() {
       setMsg("Chưa có config Jetson");
       return;
     }
-    setBusy(true);
+    if (!connected) {
+      setMsg("Chưa kết nối Jetson");
+      return;
+    }
+    setSaving(true);
     setMsg(null);
     try {
       const res = await requestConfig("set", draft, true);
-      setDraft((res.config as Record<string, unknown>) || draft);
+      const next = (res.config as Record<string, unknown>) || draft;
+      setDraft(next);
       const warns = (res.warnings as string[] | undefined) || [];
-      setMsg(
-        res.ok
-          ? `Đã ghi config.yaml và hot-apply${warns.length ? " — " + warns.join("; ") : ""}`
-          : String(res.error || "Lỗi"),
-      );
-      setConfigStatus(res.ok ? "Jetson config đã apply" : "Jetson config lỗi");
+      const errs = (res.errors as string[] | undefined) || [];
+      if (res.ok === false || errs.length) {
+        setMsg(String(res.error || errs.join("; ") || "Lỗi apply config"));
+        setConfigStatus("Jetson config lỗi");
+      } else {
+        setMsg(`Đã lưu & hot-apply${warns.length ? " — " + warns.join("; ") : ""}`);
+        setConfigStatus("Jetson config đã apply");
+      }
     } catch (e) {
       setMsg(e instanceof Error ? e.message : String(e));
     } finally {
-      setBusy(false);
+      setSaving(false);
     }
   };
 
@@ -145,14 +163,19 @@ export function SettingsModal() {
       <div className="modal settings-modal" onClick={(e) => e.stopPropagation()}>
         <header className="modal-head">
           <h2>CẤU HÌNH</h2>
-          <button className="ghost" onClick={() => setOpen(false)}>
+          <button type="button" className="ghost" onClick={() => setOpen(false)}>
             Đóng
           </button>
         </header>
 
         <div className="settings-tabs">
           {tabs.map(([id, label]) => (
-            <button key={id} className={tab === id ? "on" : ""} onClick={() => setTab(id)}>
+            <button
+              type="button"
+              key={id}
+              className={tab === id ? "on" : ""}
+              onClick={() => setTab(id)}
+            >
               {label}
             </button>
           ))}
@@ -220,8 +243,11 @@ export function SettingsModal() {
             </div>
           )}
 
-          {tab !== "gcs" && !draft && (
-            <p className="hint">{connected ? (busy ? "Đang tải…" : "Không có dữ liệu") : "Cần kết nối Jetson để sửa config thiết bị."}</p>
+          {tab !== "gcs" && busy && <p className="hint">Đang tải config từ Jetson…</p>}
+          {tab !== "gcs" && !busy && !draft && (
+            <p className="hint">
+              {connected ? "Không có dữ liệu config" : "Cần kết nối Jetson để sửa config thiết bị."}
+            </p>
           )}
 
           {tab === "service" && draft && (
@@ -335,7 +361,7 @@ export function SettingsModal() {
               </Field>
               <Field label="RTSP (tuỳ chọn)">
                 <input
-                  value={str("cameras.visible.rtsp")}
+                  value={str("cameras.visible.rtsp") === "null" ? "" : str("cameras.visible.rtsp")}
                   onChange={(e) => setVal("cameras.visible.rtsp", e.target.value || null)}
                 />
               </Field>
@@ -392,7 +418,7 @@ export function SettingsModal() {
               </label>
               <Field label="RTSP (tuỳ chọn)">
                 <input
-                  value={str("cameras.thermal.rtsp")}
+                  value={str("cameras.thermal.rtsp") === "null" ? "" : str("cameras.thermal.rtsp")}
                   onChange={(e) => setVal("cameras.thermal.rtsp", e.target.value || null)}
                 />
               </Field>
@@ -587,15 +613,20 @@ export function SettingsModal() {
         </div>
 
         <footer className="modal-foot">
-          {msg && <span className="hint ok">{msg}</span>}
+          {msg && <span className={msg.includes("Lỗi") || msg.includes("Chưa") ? "hint" : "hint ok"}>{msg}</span>}
           <span className="grow" />
           {tab === "gcs" ? (
-            <button className="on" onClick={saveGcs} disabled={busy}>
+            <button type="button" className="on" onClick={saveGcs}>
               Lưu GCS
             </button>
           ) : (
-            <button className="on" onClick={applyJetson} disabled={busy || !connected || !draft}>
-              {busy ? "Đang apply…" : "Lưu & hot-apply Jetson"}
+            <button
+              type="button"
+              className="on"
+              onClick={applyJetson}
+              disabled={saving || busy || !connected || !draft}
+            >
+              {saving ? "Đang apply…" : "Lưu & hot-apply Jetson"}
             </button>
           )}
         </footer>

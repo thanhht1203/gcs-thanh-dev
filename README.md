@@ -68,7 +68,42 @@ python -m eos_service --config config.yaml
 
 Cài service systemd: xem `jetson-service/systemd/eo-service.service`.
 
-GCS trên PC trỏ tới IP Jetson, ví dụ `ws://192.168.1.50:8765/ws`.
+## Cập nhật code lên Jetson
+
+Từ máy GCS (Windows), trong thư mục gốc repo:
+
+```bat
+deploy-jetson.bat
+```
+
+Hoặc:
+
+```bat
+set JETSON_PASSWORD=your_password
+py -3 scripts\deploy-jetson.py
+```
+
+Script sẽ:
+1. Copy `jetson-service/` → `/home/thanh/eo-control/jetson-service` (mặc định **không** ghi đè `config.yaml` trên Jetson)
+2. `sudo systemctl restart eo-service`
+
+Tuỳ chọn:
+
+| Cờ | Ý nghĩa |
+|----|---------|
+| `--deps` | `pip install -r requirements.txt` lại trên Jetson |
+| `--include-config` | Ghi đè luôn `config.yaml` |
+| `--sim` | Cập nhật unit chạy chế độ sim |
+| `--no-restart` | Chỉ copy file, không restart |
+
+Khuyến nghị cấu hình SSH key một lần để khỏi nhập mật khẩu:
+
+```bat
+ssh-keygen -t ed25519 -N "" -f %USERPROFILE%\.ssh\id_ed25519
+type %USERPROFILE%\.ssh\id_ed25519.pub | ssh thanh@192.168.1.16 "mkdir -p ~/.ssh && cat >> ~/.ssh/authorized_keys"
+```
+
+GCS trên PC trỏ tới IP Jetson, ví dụ `ws://192.168.1.16:8765/ws`.
 
 ## Phần cứng (map trong `config.yaml`)
 

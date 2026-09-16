@@ -11,7 +11,7 @@ export type GcsLayout = {
   defaultMainView: "visible" | "thermal";
 };
 
-const URL_KEY = "eo.ws.url";
+const URL_KEY = "eo.ws.url.jetson16";
 const LAYOUT_KEY = "eo.gcs.layout";
 
 const defaultLayout = (): GcsLayout => ({
@@ -54,13 +54,15 @@ type Store = {
   setJetsonConfig: (c: Record<string, unknown> | null) => void;
   configStatus: string | null;
   setConfigStatus: (s: string | null) => void;
+  reconnectNonce: number;
+  reconnect: () => void;
   keys: Set<string>;
 };
 
 const initialLayout = loadLayout();
 
 export const useStore = create<Store>((set, get) => ({
-  url: localStorage.getItem(URL_KEY) || "ws://127.0.0.1:8765/ws",
+  url: localStorage.getItem(URL_KEY) || "ws://192.168.1.16:8765/ws",
   setUrl: (url) => {
     localStorage.setItem(URL_KEY, url);
     set({ url });
@@ -93,5 +95,7 @@ export const useStore = create<Store>((set, get) => ({
   setJetsonConfig: (jetsonConfig) => set({ jetsonConfig }),
   configStatus: null,
   setConfigStatus: (configStatus) => set({ configStatus }),
+  reconnectNonce: 0,
+  reconnect: () => set({ reconnectNonce: get().reconnectNonce + 1 }),
   keys: new Set(),
 }));

@@ -17,6 +17,7 @@ export default function App() {
   const connected = useStore((s) => s.connected);
   const url = useStore((s) => s.url);
   const setUrl = useStore((s) => s.setUrl);
+  const reconnect = useStore((s) => s.reconnect);
   const layout = useStore((s) => s.layout);
   const setSettingsOpen = useStore((s) => s.setSettingsOpen);
   const tel = useStore((s) => s.telemetry);
@@ -55,10 +56,32 @@ export default function App() {
           <input
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
-            onBlur={() => setUrl(draft)}
-            onKeyDown={(e) => e.key === "Enter" && setUrl(draft)}
+            onBlur={() => {
+              const next = draft.trim();
+              if (next && next !== url) setUrl(next);
+              else setDraft(url);
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                const next = draft.trim();
+                if (next) setUrl(next);
+              }
+            }}
           />
-          <button className="ghost" onClick={() => setSettingsOpen(true)} title="Cấu hình">
+          <button
+            type="button"
+            className="ghost"
+            title="Kết nối lại"
+            onClick={() => {
+              const next = draft.trim() || url;
+              setDraft(next);
+              if (next !== url) setUrl(next);
+              else reconnect();
+            }}
+          >
+            Reconnect
+          </button>
+          <button type="button" className="ghost" onClick={() => setSettingsOpen(true)} title="Cấu hình">
             Cấu hình
           </button>
         </div>

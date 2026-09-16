@@ -41,25 +41,27 @@ export function requestConfig(action: "get" | "set", config?: Record<string, unk
 
 function settleConfig(msg: Record<string, unknown>) {
   const requestId = typeof msg.requestId === "string" ? msg.requestId : null;
-  // resolve oldest pending if server chưa echo requestId
-  const key = requestId && pendingConfig.has(requestId) ? requestId : [...pendingConfig.keys()][0];
-  if (!key) {
-    useStore.getState().setJetsonConfig((msg.config as Record<string, unknown>) || null);
+  if (requestId && pendingConfig.has(requestId)) {
+    const p = pendingConfig.get(requestId)!;
+    pendingConfig.delete(requestId);
+    window.clearTimeout(p.timer);
+    if (msg.config && typeof msg.config === "object") {
+      useStore.getState().setJetsonConfig(msg.config as Record<string, unknown>);
+    }
+    if (msg.ok === false) p.reject(new Error(String(msg.error || "Config lỗi")));
+    else p.resolve(msg);
     return;
   }
-  const p = pendingConfig.get(key);
-  if (!p) return;
-  pendingConfig.delete(key);
-  window.clearTimeout(p.timer);
-  useStore.getState().setJetsonConfig((msg.config as Record<string, unknown>) || null);
-  if (msg.ok === false) p.reject(new Error(String(msg.error || "Config lỗi")));
-  else p.resolve(msg);
+  if (msg.config && typeof msg.config === "object") {
+    useStore.getState().setJetsonConfig(msg.config as Record<string, unknown>);
+  }
 }
 
 const wsRef: { current: WebSocket | null } = { current: null };
 
 export function useJetsonSocket() {
   const url = useStore((s) => s.url);
+  const reconnectNonce = useStore((s) => s.reconnectNonce);
   const setConnected = useStore((s) => s.setConnected);
   const setTelemetry = useStore((s) => s.setTelemetry);
   const setFrame = useStore((s) => s.setFrame);
@@ -81,19 +83,30 @@ export function useJetsonSocket() {
       wsRef.current = sock;
       sock.binaryType = "arraybuffer";
       sock.onopen = () => {
+        if (wsRef.current !== sock) return;
         retry.current = 0;
         setConnected(true);
       };
       sock.onclose = () => {
-        setConnected(false);
-        wsRef.current = null;
+        // Chỉ cập nhật state nếu đây vẫn là socket hiện tại (tránh HMR/reconnect race)
+        if (wsRef.current === sock) {
+          wsRef.current = null;
+          setConnected(false);
+        }
         if (!closed) {
           retry.current += 1;
           timer = window.setTimeout(connect, Math.min(4000, 600 * retry.current));
         }
       };
-      sock.onerror = () => sock?.close();
+      sock.onerror = () => {
+        try {
+          sock?.close();
+        } catch {
+          /* ignore */
+        }
+      };
       sock.onmessage = (ev) => {
+        if (wsRef.current !== sock) return;
         if (typeof ev.data === "string") {
           try {
             const msg = JSON.parse(ev.data);
@@ -117,9 +130,22 @@ export function useJetsonSocket() {
     return () => {
       closed = true;
       if (timer) window.clearTimeout(timer);
-      sock?.close();
-      wsRef.current = null;
-      setConnected(false);
+      const s = sock;
+      if (s) {
+        s.onopen = null;
+        s.onclose = null;
+        s.onerror = null;
+        s.onmessage = null;
+        try {
+          s.close();
+        } catch {
+          /* ignore */
+        }
+      }
+      if (wsRef.current === s) {
+        wsRef.current = null;
+        setConnected(false);
+      }
     };
-  }, [url, setConnected, setTelemetry, setFrame]);
+  }, [url, reconnectNonce, setConnected, setTelemetry, setFrame]);
 }
