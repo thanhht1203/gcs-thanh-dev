@@ -35,15 +35,21 @@ class CamDevice(BaseModel):
 
 
 class CamerasCfg(BaseModel):
-    visible: CamDevice = Field(default_factory=CamDevice)
+    visible: CamDevice = Field(
+        default_factory=lambda: CamDevice(
+            device="/dev/video0", width=1280, height=720, backend="v4l2", colormap=False
+        )
+    )
     thermal: CamDevice = Field(
-        default_factory=lambda: CamDevice(device=1, width=640, height=512, backend="dshow", colormap=False)
+        default_factory=lambda: CamDevice(
+            device="/dev/video1", width=640, height=512, backend="v4l2", colormap=False
+        )
     )
 
 
 class PtzCfg(BaseModel):
     protocol: str = "pelco_d"
-    port: str = "/dev/ttyUSB1"
+    port: str = "/dev/ttyUSB3"
     baud: int = 2400
     address: int = 1
     pan_min: float = -180
@@ -55,7 +61,7 @@ class PtzCfg(BaseModel):
 
 
 class LaserCfg(BaseModel):
-    port: str = "COM26"
+    port: str = "/dev/ttyUSB2"
     baud: int = 57600
     protocol: str = "lrf7047"  # lrf7047 | generic | lightware | sim
     parity: str = "even"  # none | even | odd
@@ -67,23 +73,33 @@ class SatisCfg(BaseModel):
     """Zoom camera nhiệt SATIS qua RS422 (ICD TR_IN_OP_FOV)."""
 
     enabled: bool = True
-    port: str = "COM25"
+    port: str = "/dev/ttyUSB1"
     baud: int = 9600
     parity: str = "even"
     zoom_speed: float = 0.5  # 0.3 .. 1.3 s^-1
-    # FOV_SET_POINT_X hợp lệ: NFOV/8 <= x <= WFOV (rad) — chỉnh theo camera
     fov_set_point: float = 0.10
-    zoom_pulse_s: float = 0.35  # tự STOP sau mỗi lệnh in/out từ GCS
+    zoom_pulse_s: float = 0.35
+
+
+class ViscaCfg(BaseModel):
+    """Zoom camera ảnh thường Sony FCB-EV9520L qua VISCA."""
+
+    enabled: bool = True
+    port: str = "/dev/ttyUSB0"
+    baud: int = 9600
+    parity: str = "none"  # 8N1 theo board VISCA
+    address: int = 1  # VISCA addr → 0x81
+    zoom_pulse_s: float = 0.35
 
 
 class GpsCfg(BaseModel):
-    port: str = "/dev/ttyUSB2"
+    port: str = "/dev/ttyUSB4"
     baud: int = 9600
 
 
 class CompassCfg(BaseModel):
     source: str = "gps"
-    port: str = "/dev/ttyUSB3"
+    port: str = "/dev/ttyUSB5"
     baud: int = 9600
 
 
@@ -116,6 +132,7 @@ class Settings(BaseModel):
     ptz: PtzCfg = Field(default_factory=PtzCfg)
     laser: LaserCfg = Field(default_factory=LaserCfg)
     satis: SatisCfg = Field(default_factory=SatisCfg)
+    visca: ViscaCfg = Field(default_factory=ViscaCfg)
     gps: GpsCfg = Field(default_factory=GpsCfg)
     compass: CompassCfg = Field(default_factory=CompassCfg)
     ai: AiCfg = Field(default_factory=AiCfg)

@@ -1,6 +1,6 @@
 # Jetson service (Orin Nano 8GB)
 
-Dịch vụ onboard: camera, PTZ, laser LRF 7047, SATIS zoom, GPS, YOLO, bám mục tiêu, WebSocket.
+Dịch vụ onboard: camera, PTZ, laser LRF 7047, VISCA/SATIS zoom, GPS, YOLO, bám mục tiêu, WebSocket.
 
 ## Giả lập trên PC
 
@@ -11,29 +11,34 @@ python -m eos_service --sim
 
 `--webcam` dùng webcam thay vì cảnh synthetic.
 
-## Phần cứng thật (Windows / Jetson)
+## Phần cứng
 
-Sửa `config.yaml` theo cổng máy bạn (mẫu đã map theo code LRF/SATIS):
-
-| Thiết bị | config.yaml | Protocol |
-|----------|-------------|----------|
-| Ảnh thường | `cameras.visible.device` | V4L2 / CSI / DSHOW |
-| Ảnh nhiệt SATIS | `cameras.thermal` + EasyCap | `backend: dshow`, `colormap: false` |
-| Zoom SATIS | `satis.port` (VD `COM25`) | RS422 9600 8E1, TR_IN_OP_FOV |
-| Laser LRF 7047 | `laser.port` (VD `COM26`) | 57600 8E1, `>LM,Md,3*CS` |
-| Pan-tilt | `ptz.port` | Pelco-D RS-485 |
-| GPS | `gps.port` | NMEA GGA/RMC |
-| Compass | `compass.source: gps` hoặc serial HDT | |
-
-Nếu không mở được serial, service tự chuyển kênh đó sang sim.
+| File | Dùng khi |
+|------|----------|
+| `config.yaml` | **Mặc định Jetson** — V4L2 + `/dev/ttyUSB*` |
+| `config.windows.yaml` | Lab Windows — DirectShow + COM |
 
 ```bash
+# Jetson
 python -m eos_service --config config.yaml
+
+# Windows lab
+python -m eos_service --config config.windows.yaml
 ```
 
-Cấu hình có thể chỉnh từ GCS (nút **Cấu hình**): ghi `config.yaml` và hot-apply (mở lại camera/serial) không cần restart process. Đổi `host`/`port` vẫn cần restart service.
+| Thiết bị | Jetson (mặc định) | Protocol |
+|----------|-------------------|----------|
+| Ảnh thường FCB | video `0`, `v4l2` | V4L2 |
+| Zoom VISCA | `/dev/ttyUSB0` | 9600 8N1 |
+| Ảnh nhiệt SATIS | video `1`, `v4l2` | V4L2 |
+| Zoom SATIS | `/dev/ttyUSB1` | RS422 9600 8E1 |
+| Laser LRF 7047 | `/dev/ttyUSB2` | 57600 8E1 |
+| Pan-tilt | `/dev/ttyUSB3` | Pelco-D |
+| GPS | `/dev/ttyUSB4` | NMEA |
 
-Trên Jetson đổi `COM25`/`COM26` → `/dev/ttyUSBx`.
+Thứ tự `ttyUSB*` phụ thuộc lúc cắm USB. Chỉnh từ **GCS → Cấu hình → Camera / Serial → Lưu & hot-apply** (ghi `config.yaml` + mở lại cổng, không cần restart process). Đổi `host`/`port` vẫn cần restart service.
+
+Nếu không mở được serial/camera, kênh đó tự chuyển sim.
 
 ## Jetson + YOLO
 

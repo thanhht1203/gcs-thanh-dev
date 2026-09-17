@@ -16,6 +16,7 @@ from fastapi.responses import FileResponse, JSONResponse, Response
 from .ai.detector import Detector, keep_track, pick_nearest
 from .cameras.hub import CameraHub
 from .cameras.satis import SatisController
+from .cameras.visca import ViscaController
 from .config import Settings, merge_settings, save_settings, settings_to_dict
 from .geo import compute_fov, target_geolocation
 from .media.recorder import Recorder
@@ -67,6 +68,7 @@ class Engine:
         self.ptz = PtzController(settings.ptz, settings.sim)
         self.laser = LaserRangefinder(settings.laser, settings.sim)
         self.satis = SatisController(settings.satis, settings.sim)
+        self.visca = ViscaController(settings.visca, settings.sim)
         self.nav = GpsCompass(settings, settings.sim)
         self.detector = Detector(settings.ai, settings.sim)
         self.recorder = Recorder(settings.record.dir, settings.record.fourcc)
@@ -135,6 +137,7 @@ class Engine:
         self.state.laser_m = self.laser.range_m
         self.state.laser_valid = self.laser.valid
         self.satis.tick()
+        self.visca.tick()
 
         dets = []
         if self.state.detect_on:
@@ -240,6 +243,7 @@ class Engine:
                 self.ptz.reconfigure(new_settings.ptz, new_settings.sim)
                 self.laser.reconfigure(new_settings.laser, new_settings.sim)
                 self.satis.reconfigure(new_settings.satis, new_settings.sim)
+                self.visca.reconfigure(new_settings.visca, new_settings.sim)
                 self.nav.reconfigure(new_settings, new_settings.sim)
                 self.detector.reconfigure(new_settings.ai, new_settings.sim)
                 self.recorder.reconfigure(new_settings.record.dir, new_settings.record.fourcc)
@@ -316,21 +320,30 @@ class Engine:
         elif t == "zoom":
             action = msg.get("action")
             zmin, zmax = self.settings.optics.zoom_min, self.settings.optics.zoom_max
+            # Ảnh thường → VISCA (FCB); ảnh nhiệt → SATIS
+            thermal = st.camera.source == "thermal"
             if action == "in":
                 st.zoom = min(zmax, st.zoom * 1.15)
-                self.satis.zoom_in()
+                if thermal:
+                    self.satis.zoom_in()
+                else:
+                    self.visca.zoom_in()
             elif action == "out":
                 st.zoom = max(zmin, st.zoom / 1.15)
-                self.satis.zoom_out()
+                if thermal:
+                    self.satis.zoom_out()
+                else:
+                    self.visca.zoom_out()
             elif action == "stop":
                 self.satis.zoom_stop()
+                self.visca.zoom_stop()
             elif action == "set":
                 st.zoom = max(zmin, min(zmax, float(msg.get("value", 1))))
                 mid = (zmin + zmax) / 2
                 if st.zoom >= mid:
-                    self.satis.zoom_in(pulse_s=0.2)
+                    (self.satis if thermal else self.visca).zoom_in(pulse_s=0.2)
                 else:
-                    self.satis.zoom_out(pulse_s=0.2)
+                    (self.satis if thermal else self.visca).zoom_out(pulse_s=0.2)
         elif t == "camera":
             if "autofocus" in msg:
                 st.camera.autofocus = bool(msg["autofocus"])
@@ -413,6 +426,7 @@ class Engine:
     def stop(self) -> None:
         self._stop.set()
         self.satis.close()
+        self.visca.close()
         self.cameras.close()
         self.ptz.close()
         self.laser.close()

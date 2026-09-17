@@ -1,5 +1,5 @@
-# EO Control — Jetson Orin Nano 8GB (mặc định Linux)
-# Đổi cổng UART/video trong GCS → Cấu hình → Serial / Camera, hoặc sửa file này.
+# Tham chiếu khi chạy service trên Windows (lab / EasyCap)
+# Copy đè config.yaml hoặc: python -m eos_service --config config.windows.yaml
 host: 0.0.0.0
 port: 8765
 sim: false
@@ -14,43 +14,37 @@ platform:
 
 cameras:
   visible:
-    # FCB-EV9520L — kiểm tra: v4l2-ctl --list-devices
-    device: /dev/video0
+    device: 1
     width: 1280
     height: 720
     fps: 15
-    backend: v4l2
+    backend: dshow
   thermal:
-    # SATIS analog / USB capture
-    device: /dev/video1
+    device: 2
     width: 640
     height: 512
     fps: 15
-    backend: v4l2
+    backend: dshow
     colormap: false
-    # rtsp: rtsp://192.168.1.64:554/stream1
 
-# Zoom ảnh thường FCB-EV9520L — VISCA
 visca:
   enabled: true
-  port: /dev/ttyUSB0
+  port: COM27
   baud: 9600
   parity: none
   zoom_pulse_s: 0.35
 
-# Zoom ảnh nhiệt SATIS — RS422
 satis:
   enabled: true
-  port: /dev/ttyUSB1
+  port: COM25
   baud: 9600
   parity: even
   zoom_speed: 0.5
   fov_set_point: 0.10
   zoom_pulse_s: 0.35
 
-# LRF 7047
 laser:
-  port: /dev/ttyUSB2
+  port: COM26
   baud: 57600
   protocol: lrf7047
   parity: even
@@ -59,7 +53,7 @@ laser:
 
 ptz:
   protocol: pelco_d
-  port: /dev/ttyUSB3
+  port: COM24
   baud: 2400
   address: 1
   pan_min: -180
@@ -70,12 +64,12 @@ ptz:
   tilt_speed: 8.0
 
 gps:
-  port: /dev/ttyUSB4
+  port: COM23
   baud: 9600
 
 compass:
   source: gps
-  port: /dev/ttyUSB5
+  port: COM22
   baud: 9600
 
 ai:

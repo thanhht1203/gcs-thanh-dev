@@ -427,7 +427,46 @@ export function SettingsModal() {
 
           {tab === "serial" && draft && (
             <div className="cfg-grid">
-              <h4>SATIS zoom</h4>
+              <h4>VISCA zoom (ảnh thường FCB)</h4>
+              <label className="cfg-check">
+                <input
+                  type="checkbox"
+                  checked={bool("visca.enabled")}
+                  onChange={(e) => setVal("visca.enabled", e.target.checked)}
+                />
+                Bật VISCA
+              </label>
+              <Field label="Port">
+                <input
+                  value={str("visca.port")}
+                  onChange={(e) => setVal("visca.port", e.target.value)}
+                  placeholder="/dev/ttyUSB0 hoặc COM27"
+                />
+              </Field>
+              <Field label="Baud">
+                <input
+                  type="number"
+                  value={num("visca.baud")}
+                  onChange={(e) => setVal("visca.baud", Number(e.target.value))}
+                />
+              </Field>
+              <Field label="Parity">
+                <select value={str("visca.parity")} onChange={(e) => setVal("visca.parity", e.target.value)}>
+                  <option value="none">none (8N1)</option>
+                  <option value="even">even</option>
+                  <option value="odd">odd</option>
+                </select>
+              </Field>
+              <Field label="Pulse stop (s)">
+                <input
+                  type="number"
+                  step="0.05"
+                  value={num("visca.zoom_pulse_s")}
+                  onChange={(e) => setVal("visca.zoom_pulse_s", Number(e.target.value))}
+                />
+              </Field>
+
+              <h4>SATIS zoom (ảnh nhiệt)</h4>
               <label className="cfg-check">
                 <input
                   type="checkbox"
@@ -437,10 +476,45 @@ export function SettingsModal() {
                 Bật SATIS
               </label>
               <Field label="Port">
-                <input value={str("satis.port")} onChange={(e) => setVal("satis.port", e.target.value)} />
+                <input
+                  value={str("satis.port")}
+                  onChange={(e) => setVal("satis.port", e.target.value)}
+                  placeholder="/dev/ttyUSB1 hoặc COM25"
+                />
               </Field>
               <Field label="Baud">
                 <input type="number" value={num("satis.baud")} onChange={(e) => setVal("satis.baud", Number(e.target.value))} />
+              </Field>
+              <Field label="Parity">
+                <select value={str("satis.parity")} onChange={(e) => setVal("satis.parity", e.target.value)}>
+                  <option value="none">none</option>
+                  <option value="even">even (8E1)</option>
+                  <option value="odd">odd</option>
+                </select>
+              </Field>
+              <Field label="Zoom speed">
+                <input
+                  type="number"
+                  step="0.1"
+                  value={num("satis.zoom_speed")}
+                  onChange={(e) => setVal("satis.zoom_speed", Number(e.target.value))}
+                />
+              </Field>
+              <Field label="FOV set point (rad)">
+                <input
+                  type="number"
+                  step="0.01"
+                  value={num("satis.fov_set_point")}
+                  onChange={(e) => setVal("satis.fov_set_point", Number(e.target.value))}
+                />
+              </Field>
+              <Field label="Pulse stop (s)">
+                <input
+                  type="number"
+                  step="0.05"
+                  value={num("satis.zoom_pulse_s")}
+                  onChange={(e) => setVal("satis.zoom_pulse_s", Number(e.target.value))}
+                />
               </Field>
 
               <h4>PTZ</h4>
@@ -480,7 +554,7 @@ export function SettingsModal() {
                 />
               </Field>
 
-              <h4>Laser LRF</h4>
+              <h4>Laser LRF 7047</h4>
               <Field label="Protocol">
                 <select value={str("laser.protocol")} onChange={(e) => setVal("laser.protocol", e.target.value)}>
                   <option value="lrf7047">lrf7047</option>
@@ -502,6 +576,17 @@ export function SettingsModal() {
                   <option value="odd">odd</option>
                 </select>
               </Field>
+              <Field label="Lệnh đo">
+                <input value={str("laser.measure_cmd")} onChange={(e) => setVal("laser.measure_cmd", e.target.value)} />
+              </Field>
+              <Field label="Chu kỳ continuous (s)">
+                <input
+                  type="number"
+                  step="0.1"
+                  value={num("laser.measure_interval_s")}
+                  onChange={(e) => setVal("laser.measure_interval_s", Number(e.target.value))}
+                />
+              </Field>
 
               <h4>GPS / Compass</h4>
               <Field label="GPS port">
@@ -520,6 +605,9 @@ export function SettingsModal() {
               <Field label="Compass port">
                 <input value={str("compass.port")} onChange={(e) => setVal("compass.port", e.target.value)} />
               </Field>
+              <p className="hint">
+                Jetson: /dev/ttyUSB* · Windows: COMx. Bấm «Lưu &amp; hot-apply» để ghi config.yaml trên Jetson và mở lại cổng.
+              </p>
             </div>
           )}
 
