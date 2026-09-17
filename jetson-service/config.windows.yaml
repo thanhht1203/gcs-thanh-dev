@@ -28,10 +28,11 @@ cameras:
     colormap: false
 
 visca:
-  enabled: true
+  protocol: visca   # visca | sim
   port: COM27
   baud: 9600
   parity: none
+  address: 1
   zoom_pulse_s: 0.35
 
 satis:

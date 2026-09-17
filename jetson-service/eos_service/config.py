@@ -82,13 +82,15 @@ class SatisCfg(BaseModel):
 
 
 class ViscaCfg(BaseModel):
-    """Zoom camera ảnh thường Sony FCB-EV9520L qua VISCA."""
+    """Zoom camera ảnh thường Sony FCB-EV9520L qua VISCA — cùng kiểu laser/ptz."""
 
+    protocol: str = "visca"  # visca | sim
+    # Giữ enabled để tương thích config cũ (enabled: false ≡ protocol: sim)
     enabled: bool = True
     port: str = "/dev/ttyUSB0"
     baud: int = 9600
-    parity: str = "none"  # 8N1 theo board VISCA
-    address: int = 1  # VISCA addr → 0x81
+    parity: str = "none"  # none | even | odd — FCB board thường 8N1
+    address: int = 1  # VISCA camera address → 0x81
     zoom_pulse_s: float = 0.35
 
 

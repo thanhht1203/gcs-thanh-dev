@@ -427,15 +427,13 @@ export function SettingsModal() {
 
           {tab === "serial" && draft && (
             <div className="cfg-grid">
-              <h4>VISCA zoom (ảnh thường FCB)</h4>
-              <label className="cfg-check">
-                <input
-                  type="checkbox"
-                  checked={bool("visca.enabled")}
-                  onChange={(e) => setVal("visca.enabled", e.target.checked)}
-                />
-                Bật VISCA
-              </label>
+              <h4>VISCA (ảnh thường FCB-EV9520L)</h4>
+              <Field label="Protocol">
+                <select value={str("visca.protocol") || "visca"} onChange={(e) => setVal("visca.protocol", e.target.value)}>
+                  <option value="visca">visca</option>
+                  <option value="sim">sim</option>
+                </select>
+              </Field>
               <Field label="Port">
                 <input
                   value={str("visca.port")}
@@ -451,11 +449,20 @@ export function SettingsModal() {
                 />
               </Field>
               <Field label="Parity">
-                <select value={str("visca.parity")} onChange={(e) => setVal("visca.parity", e.target.value)}>
+                <select value={str("visca.parity") || "none"} onChange={(e) => setVal("visca.parity", e.target.value)}>
                   <option value="none">none (8N1)</option>
                   <option value="even">even</option>
                   <option value="odd">odd</option>
                 </select>
+              </Field>
+              <Field label="Address">
+                <input
+                  type="number"
+                  min={1}
+                  max={7}
+                  value={num("visca.address") || 1}
+                  onChange={(e) => setVal("visca.address", Number(e.target.value))}
+                />
               </Field>
               <Field label="Pulse stop (s)">
                 <input

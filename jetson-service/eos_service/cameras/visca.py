@@ -5,24 +5,39 @@ import time
 
 from ..config import ViscaCfg
 
-# VISCA FCB-EV9520L — zoom tele/wide/stop
-ZOOM_STOP = bytes([0x81, 0x01, 0x04, 0x07, 0x00, 0xFF])
-ZOOM_IN = bytes([0x81, 0x01, 0x04, 0x07, 0x02, 0xFF])
-ZOOM_OUT = bytes([0x81, 0x01, 0x04, 0x07, 0x03, 0xFF])
-
 
 class ViscaController:
-    """Điều khiển zoom camera ảnh thường Sony FCB-EV9520L qua VISCA."""
+    """Điều khiển zoom camera ảnh thường Sony FCB-EV9520L qua VISCA.
+
+    Cấu hình giống laser/ptz: protocol, port, baud, parity, address.
+    """
 
     def __init__(self, cfg: ViscaCfg, sim: bool):
         self.cfg = cfg
-        self.sim = sim or not cfg.enabled
+        self.sim = sim or self._cfg_is_sim(cfg)
         self._ser = None
         self._lock = threading.Lock()
         self._stop_at = 0.0
         self._active = False
         if not self.sim:
             self._open()
+
+    @staticmethod
+    def _cfg_is_sim(cfg: ViscaCfg) -> bool:
+        if (cfg.protocol or "").lower() == "sim":
+            return True
+        # Tương thích config cũ dùng enabled: false
+        if hasattr(cfg, "enabled") and cfg.enabled is False:
+            return True
+        return False
+
+    def _addr_byte(self) -> int:
+        # VISCA: camera address 1 → 0x81
+        return 0x80 | max(1, min(7, int(self.cfg.address)))
+
+    def _cmd(self, zoom_op: int) -> bytes:
+        # 8x 01 04 07 0p FF — p: 00 stop, 02 tele, 03 wide
+        return bytes([self._addr_byte(), 0x01, 0x04, 0x07, zoom_op & 0xFF, 0xFF])
 
     def _open(self) -> None:
         try:
@@ -42,27 +57,29 @@ class ViscaController:
                 stopbits=serial.STOPBITS_ONE,
                 timeout=0.1,
             )
-            print(f"[visca] FCB mở {self.cfg.port} @ {self.cfg.baud} 8N1")
+            bits = {"none": "8N1", "even": "8E1", "odd": "8O1"}.get(self.cfg.parity, "8N1")
+            print(f"[visca] FCB mở {self.cfg.port} @ {self.cfg.baud} {bits} addr={self.cfg.address}")
         except Exception as exc:
             print(f"[visca] Không mở {self.cfg.port}: {exc} — sim zoom")
             self.sim = True
             self._ser = None
 
     def zoom_in(self, pulse_s: float | None = None) -> None:
-        self._send(ZOOM_IN, "ZOOM IN")
+        self._send(self._cmd(0x02), "ZOOM IN")
         self._arm_auto_stop(pulse_s)
 
     def zoom_out(self, pulse_s: float | None = None) -> None:
-        self._send(ZOOM_OUT, "ZOOM OUT")
+        self._send(self._cmd(0x03), "ZOOM OUT")
         self._arm_auto_stop(pulse_s)
 
     def zoom_stop(self) -> None:
-        self._send(ZOOM_STOP, "ZOOM STOP")
+        self._send(self._cmd(0x00), "ZOOM STOP")
         with self._lock:
             self._active = False
             self._stop_at = 0.0
 
     def tick(self) -> None:
+        """Gọi từ vòng lặp engine — tự dừng zoom sau pulse."""
         with self._lock:
             due = self._active and self._stop_at > 0 and time.perf_counter() >= self._stop_at
         if due:
@@ -91,7 +108,7 @@ class ViscaController:
                     response = self._ser.read(self._ser.in_waiting)
                     print(f"[visca] {name} TX {command.hex(' ').upper()}  RX {response.hex(' ').upper()}")
                 else:
-                    print(f"[visca] {name}: {command.hex(' ').upper()}")
+                    print(f"[visca] TX {name}: {command.hex(' ').upper()}")
         except Exception as exc:
             print(f"[visca] Gửi lỗi: {exc}")
 
@@ -110,7 +127,7 @@ class ViscaController:
     def reconfigure(self, cfg: ViscaCfg, sim: bool) -> None:
         self.close()
         self.cfg = cfg
-        self.sim = sim or not cfg.enabled
+        self.sim = sim or self._cfg_is_sim(cfg)
         self._active = False
         self._stop_at = 0.0
         if not self.sim:

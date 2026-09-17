@@ -30,12 +30,13 @@ cameras:
     colormap: false
     # rtsp: rtsp://192.168.1.64:554/stream1
 
-# Zoom ảnh thường FCB-EV9520L — VISCA
+# Zoom ảnh thường FCB-EV9520L — VISCA (giống laser/ptz: protocol + port + address)
 visca:
-  enabled: true
+  protocol: visca   # visca | sim
   port: /dev/ttyUSB0
   baud: 9600
   parity: none
+  address: 1
   zoom_pulse_s: 0.35
 
 # Zoom ảnh nhiệt SATIS — RS422

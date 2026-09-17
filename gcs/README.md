@@ -1,25 +1,56 @@
 # GCS Windows
 
-Phần mềm giao diện điều khiển (Electron + React).
+Phần mềm giao diện điều khiển EO (Electron + React + Zustand).
+
+## Chạy
 
 ```bash
+cd gcs
 npm install
 npm run electron:dev
 ```
 
-Chỉ trình duyệt: `npm run dev` rồi mở http://127.0.0.1:5173
+Chỉ trình duyệt: `npm run dev` → http://127.0.0.1:5174 (port theo `vite.config.ts`).
 
-Đóng gói installer:
+## Đóng gói
 
 ```bash
 npm run electron:build
 ```
 
-File ra `gcs/release/`.
+Installer ra `gcs/release/`.
 
-Ô kết nối trên thanh trên: `ws://<IP-Jetson>:8765/ws`
+## Kết nối Jetson
 
-Nút **Cấu hình** mở panel:
-- **GCS**: URL WebSocket, độ rộng sidebar, chiều cao hàng dưới, hiện/ẩn PiP & bản đồ (lưu localStorage)
-- **Jetson**: chỉnh toàn bộ `config.yaml` rồi **Lưu & hot-apply** (mở lại thiết bị không restart service)
+Ô URL trên thanh trên, ví dụ:
 
+```
+ws://192.168.1.16:8765/ws
+```
+
+- Đèn xanh = WebSocket OK  
+- **Reconnect** = mở lại kết nối  
+- Demo local: `ws://127.0.0.1:8765/ws` (service `--sim` trên PC)
+
+## Cấu hình
+
+Nút **Cấu hình**:
+
+| Tab | Lưu ở đâu | Ghi chú |
+|-----|-----------|---------|
+| GCS | `localStorage` trên PC | URL, sidebar, PiP, bản đồ |
+| Service / Platform / Camera / Serial / AI / Optics | Jetson `config.yaml` | **Lưu & hot-apply** — không restart process |
+
+Serial quan trọng:
+
+- **VISCA** — zoom ảnh thường FCB (`protocol`, `port`, `baud`, `parity`, `address`)
+- **SATIS** — zoom ảnh nhiệt
+- **Laser / PTZ / GPS** — đúng cổng UART
+
+## Thành phần UI
+
+- Video chính + PiP + bản đồ  
+- Panel PTZ, Camera, AI, Record  
+- HUD telemetry (pan/tilt/zoom/LRF/GPS)
+
+Phím tắt: xem [README gốc](../README.md#phím-tắt).
