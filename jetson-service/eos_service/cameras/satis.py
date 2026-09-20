@@ -39,7 +39,7 @@ class SatisController:
 
     def __init__(self, cfg: SatisCfg, sim: bool):
         self.cfg = cfg
-        self.sim = sim or not cfg.enabled
+        self.sim = sim or self._cfg_is_sim(cfg)
         self._ser = None
         self._lock = threading.Lock()
         self._stop_at = 0.0
@@ -47,20 +47,35 @@ class SatisController:
         if not self.sim:
             self._open()
 
+    @staticmethod
+    def _cfg_is_sim(cfg: SatisCfg) -> bool:
+        if (cfg.protocol or "").lower() == "sim":
+            return True
+        if cfg.enabled is False:
+            return True
+        return False
+
     def _open(self) -> None:
         try:
             import serial
+
+            parity = serial.PARITY_NONE
+            if self.cfg.parity == "even":
+                parity = serial.PARITY_EVEN
+            elif self.cfg.parity == "odd":
+                parity = serial.PARITY_ODD
 
             kwargs = {
                 "port": self.cfg.port,
                 "baudrate": self.cfg.baud,
                 "bytesize": serial.EIGHTBITS,
-                "parity": serial.PARITY_EVEN if self.cfg.parity == "even" else serial.PARITY_NONE,
+                "parity": parity,
                 "stopbits": serial.STOPBITS_ONE,
                 "timeout": 0.1,
             }
             self._ser = serial.Serial(**kwargs)
-            print(f"[satis] RS422 mở {self.cfg.port} @ {self.cfg.baud} 8E1")
+            bits = {"none": "8N1", "even": "8E1", "odd": "8O1"}.get(self.cfg.parity, "8E1")
+            print(f"[satis] RS422 mở {self.cfg.port} @ {self.cfg.baud} {bits}")
         except Exception as exc:
             print(f"[satis] Không mở {self.cfg.port}: {exc} — sim zoom")
             self.sim = True
@@ -133,7 +148,7 @@ class SatisController:
     def reconfigure(self, cfg: SatisCfg, sim: bool) -> None:
         self.close()
         self.cfg = cfg
-        self.sim = sim or not cfg.enabled
+        self.sim = sim or self._cfg_is_sim(cfg)
         self._active = False
         self._stop_at = 0.0
         if not self.sim:

@@ -36,7 +36,7 @@ visca:
   zoom_pulse_s: 0.35
 
 satis:
-  enabled: true
+  protocol: satis   # satis | sim
   port: COM25
   baud: 9600
   parity: even

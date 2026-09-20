@@ -180,7 +180,7 @@ def test_visca(settings) -> bool:
 def test_satis(settings) -> bool:
     print("\n== satis (thermal zoom) ==")
     cfg = settings.satis
-    _info(f"enabled={cfg.enabled} port={cfg.port} baud={cfg.baud}")
+    _info(f"protocol={getattr(cfg, 'protocol', 'satis')} port={cfg.port} baud={cfg.baud}")
     ctrl = SatisController(cfg, sim=False)
     try:
         if ctrl.sim:

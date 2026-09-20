@@ -39,9 +39,9 @@ visca:
   address: 1
   zoom_pulse_s: 0.35
 
-# Zoom ảnh nhiệt SATIS — RS422
+# Zoom ảnh nhiệt SATIS — RS422 (cùng kiểu VISCA/laser: protocol + port + …)
 satis:
-  enabled: true
+  protocol: satis   # satis | sim
   port: /dev/ttyUSB1
   baud: 9600
   parity: even

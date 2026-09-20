@@ -427,6 +427,11 @@ export function SettingsModal() {
 
           {tab === "serial" && draft && (
             <div className="cfg-grid">
+              <p className="hint" style={{ gridColumn: "1 / -1" }}>
+                Cùng kiểu field: Protocol → Port → Baud → Parity/Address → tham số riêng. Jetson: /dev/ttyUSB* ·
+                Windows: COMx.
+              </p>
+
               <h4>VISCA (ảnh thường FCB-EV9520L)</h4>
               <Field label="Protocol">
                 <select value={str("visca.protocol") || "visca"} onChange={(e) => setVal("visca.protocol", e.target.value)}>
@@ -435,22 +440,14 @@ export function SettingsModal() {
                 </select>
               </Field>
               <Field label="Port">
-                <input
-                  value={str("visca.port")}
-                  onChange={(e) => setVal("visca.port", e.target.value)}
-                  placeholder="/dev/ttyUSB0 hoặc COM27"
-                />
+                <input value={str("visca.port")} onChange={(e) => setVal("visca.port", e.target.value)} />
               </Field>
               <Field label="Baud">
-                <input
-                  type="number"
-                  value={num("visca.baud")}
-                  onChange={(e) => setVal("visca.baud", Number(e.target.value))}
-                />
+                <input type="number" value={num("visca.baud")} onChange={(e) => setVal("visca.baud", Number(e.target.value))} />
               </Field>
               <Field label="Parity">
                 <select value={str("visca.parity") || "none"} onChange={(e) => setVal("visca.parity", e.target.value)}>
-                  <option value="none">none (8N1)</option>
+                  <option value="none">none</option>
                   <option value="even">even</option>
                   <option value="odd">odd</option>
                 </select>
@@ -473,29 +470,23 @@ export function SettingsModal() {
                 />
               </Field>
 
-              <h4>SATIS zoom (ảnh nhiệt)</h4>
-              <label className="cfg-check">
-                <input
-                  type="checkbox"
-                  checked={bool("satis.enabled")}
-                  onChange={(e) => setVal("satis.enabled", e.target.checked)}
-                />
-                Bật SATIS
-              </label>
+              <h4>SATIS (ảnh nhiệt)</h4>
+              <Field label="Protocol">
+                <select value={str("satis.protocol") || "satis"} onChange={(e) => setVal("satis.protocol", e.target.value)}>
+                  <option value="satis">satis</option>
+                  <option value="sim">sim</option>
+                </select>
+              </Field>
               <Field label="Port">
-                <input
-                  value={str("satis.port")}
-                  onChange={(e) => setVal("satis.port", e.target.value)}
-                  placeholder="/dev/ttyUSB1 hoặc COM25"
-                />
+                <input value={str("satis.port")} onChange={(e) => setVal("satis.port", e.target.value)} />
               </Field>
               <Field label="Baud">
                 <input type="number" value={num("satis.baud")} onChange={(e) => setVal("satis.baud", Number(e.target.value))} />
               </Field>
               <Field label="Parity">
-                <select value={str("satis.parity")} onChange={(e) => setVal("satis.parity", e.target.value)}>
+                <select value={str("satis.parity") || "even"} onChange={(e) => setVal("satis.parity", e.target.value)}>
                   <option value="none">none</option>
-                  <option value="even">even (8E1)</option>
+                  <option value="even">even</option>
                   <option value="odd">odd</option>
                 </select>
               </Field>
@@ -596,25 +587,29 @@ export function SettingsModal() {
               </Field>
 
               <h4>GPS / Compass</h4>
-              <Field label="GPS port">
-                <input value={str("gps.port")} onChange={(e) => setVal("gps.port", e.target.value)} />
-              </Field>
-              <Field label="GPS baud">
-                <input type="number" value={num("gps.baud")} onChange={(e) => setVal("gps.baud", Number(e.target.value))} />
-              </Field>
-              <Field label="Compass source">
+              <Field label="Protocol / source">
                 <select value={str("compass.source")} onChange={(e) => setVal("compass.source", e.target.value)}>
                   <option value="gps">gps</option>
                   <option value="serial">serial</option>
                   <option value="sim">sim</option>
                 </select>
               </Field>
+              <Field label="GPS port">
+                <input value={str("gps.port")} onChange={(e) => setVal("gps.port", e.target.value)} />
+              </Field>
+              <Field label="GPS baud">
+                <input type="number" value={num("gps.baud")} onChange={(e) => setVal("gps.baud", Number(e.target.value))} />
+              </Field>
               <Field label="Compass port">
                 <input value={str("compass.port")} onChange={(e) => setVal("compass.port", e.target.value)} />
               </Field>
-              <p className="hint">
-                Jetson: /dev/ttyUSB* · Windows: COMx. Bấm «Lưu &amp; hot-apply» để ghi config.yaml trên Jetson và mở lại cổng.
-              </p>
+              <Field label="Compass baud">
+                <input
+                  type="number"
+                  value={num("compass.baud")}
+                  onChange={(e) => setVal("compass.baud", Number(e.target.value))}
+                />
+              </Field>
             </div>
           )}
 

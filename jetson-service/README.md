@@ -49,7 +49,7 @@ python -m eos_service --config config.windows.yaml
 
 `/dev/video*` = hình ảnh · `/dev/ttyUSB*` = lệnh serial. Thứ tự USB phụ thuộc lúc cắm — chỉnh qua **GCS → Cấu hình** (hot-apply) hoặc sửa `config.yaml`.
 
-Ví dụ VISCA trong config (cùng kiểu laser/ptz):
+Ví dụ VISCA / SATIS trong config (cùng kiểu laser/ptz):
 
 ```yaml
 visca:
@@ -58,6 +58,15 @@ visca:
   baud: 9600
   parity: none
   address: 1
+  zoom_pulse_s: 0.35
+
+satis:
+  protocol: satis   # satis | sim
+  port: /dev/ttyUSB1
+  baud: 9600
+  parity: even
+  zoom_speed: 0.5
+  fov_set_point: 0.10
   zoom_pulse_s: 0.35
 ```
 

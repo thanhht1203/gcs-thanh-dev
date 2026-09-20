@@ -11,7 +11,7 @@ export type GcsLayout = {
   defaultMainView: "visible" | "thermal";
 };
 
-const URL_KEY = "eo.ws.url.jetson16";
+const URL_KEY = "eo.ws.url.loopback2";
 const LAYOUT_KEY = "eo.gcs.layout";
 
 const defaultLayout = (): GcsLayout => ({
@@ -62,7 +62,7 @@ type Store = {
 const initialLayout = loadLayout();
 
 export const useStore = create<Store>((set, get) => ({
-  url: localStorage.getItem(URL_KEY) || "ws://192.168.1.16:8765/ws",
+  url: localStorage.getItem(URL_KEY) || "ws://127.0.0.2:8765/ws",
   setUrl: (url) => {
     localStorage.setItem(URL_KEY, url);
     set({ url });

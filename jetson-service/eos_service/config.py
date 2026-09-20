@@ -70,8 +70,10 @@ class LaserCfg(BaseModel):
 
 
 class SatisCfg(BaseModel):
-    """Zoom camera nhiệt SATIS qua RS422 (ICD TR_IN_OP_FOV)."""
+    """Zoom camera nhiệt SATIS qua RS422 — cùng kiểu VISCA/laser/ptz."""
 
+    protocol: str = "satis"  # satis | sim
+    # Tương thích config cũ (enabled: false ≡ protocol: sim)
     enabled: bool = True
     port: str = "/dev/ttyUSB1"
     baud: int = 9600
