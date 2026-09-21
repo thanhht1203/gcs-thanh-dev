@@ -5,6 +5,7 @@ import threading
 import time
 
 from ..config import SatisCfg
+from .ports import is_serial_port, is_video_device
 
 # ICD SATIS — TR_IN_OP_FOV
 TR_IN_OP_FOV = 0x00DA
@@ -35,7 +36,12 @@ def make_satis_frame(application_frame: bytes) -> bytes:
 
 
 class SatisController:
-    """Điều khiển zoom camera nhiệt SATIS qua RS422."""
+    """
+    Zoom SATIS qua RS422 (pyserial).
+
+    Anh nhiet: OpenCV mo satis.video / cameras.thermal (/dev/video*).
+    Neu gan nham /dev/video vao port → tu choi mo serial.
+    """
 
     def __init__(self, cfg: SatisCfg, sim: bool):
         self.cfg = cfg
@@ -56,6 +62,21 @@ class SatisController:
         return False
 
     def _open(self) -> None:
+        port = self.cfg.port
+        if is_video_device(port):
+            print(
+                f"[satis] port={port} is /dev/video — use OpenCV for video, "
+                f"not pyserial. RS422 zoom needs /dev/ttyUSB* or COM*. "
+                f"Set cameras.thermal.device or satis.video = {port}"
+            )
+            self.sim = True
+            self._ser = None
+            return
+        if not is_serial_port(port):
+            print(f"[satis] port is not a serial UART ({port}) — skip RS422 zoom")
+            self.sim = True
+            self._ser = None
+            return
         try:
             import serial
 
@@ -66,7 +87,7 @@ class SatisController:
                 parity = serial.PARITY_ODD
 
             kwargs = {
-                "port": self.cfg.port,
+                "port": str(port),
                 "baudrate": self.cfg.baud,
                 "bytesize": serial.EIGHTBITS,
                 "parity": parity,
@@ -75,9 +96,9 @@ class SatisController:
             }
             self._ser = serial.Serial(**kwargs)
             bits = {"none": "8N1", "even": "8E1", "odd": "8O1"}.get(self.cfg.parity, "8E1")
-            print(f"[satis] RS422 mở {self.cfg.port} @ {self.cfg.baud} {bits}")
+            print(f"[satis] RS422 zoom mo {port} @ {self.cfg.baud} {bits}")
         except Exception as exc:
-            print(f"[satis] Không mở {self.cfg.port}: {exc} — sim zoom")
+            print(f"[satis] Khong mo {port}: {exc} — sim zoom")
             self.sim = True
             self._ser = None
 
@@ -96,7 +117,6 @@ class SatisController:
             self._stop_at = 0.0
 
     def tick(self) -> None:
-        """Gọi từ vòng lặp engine — tự dừng zoom sau pulse."""
         with self._lock:
             due = self._active and self._stop_at > 0 and time.perf_counter() >= self._stop_at
         if due:
@@ -131,7 +151,7 @@ class SatisController:
             name = {ZOOM_IN: "IN", ZOOM_OUT: "OUT", ZOOM_STOP: "STOP"}.get(command, hex(command))
             print(f"[satis] TX ZOOM {name}: {frame.hex(' ').upper()}")
         except Exception as exc:
-            print(f"[satis] Gửi lỗi: {exc}")
+            print(f"[satis] Gui loi: {exc}")
 
     def close(self) -> None:
         try:

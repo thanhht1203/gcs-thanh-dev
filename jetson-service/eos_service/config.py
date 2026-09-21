@@ -70,11 +70,18 @@ class LaserCfg(BaseModel):
 
 
 class SatisCfg(BaseModel):
-    """Zoom camera nhiệt SATIS qua RS422 — cùng kiểu VISCA/laser/ptz."""
+    """
+    SATIS ảnh nhiệt gồm 2 kết nối khác nhau:
+      - video: /dev/video*  → OpenCV (V4L2), KHÔNG dùng pyserial
+      - port:  /dev/ttyUSB* → RS422 zoom (pyserial)
+    """
 
     protocol: str = "satis"  # satis | sim
     # Tương thích config cũ (enabled: false ≡ protocol: sim)
     enabled: bool = True
+    # Stream ảnh nhiệt (EasyCap / USB capture)
+    video: str | int | None = "/dev/video1"
+    # RS422 điều khiển zoom — chỉ tty/COM, không phải /dev/video*
     port: str = "/dev/ttyUSB1"
     baud: int = 9600
     parity: str = "even"
@@ -84,11 +91,18 @@ class SatisCfg(BaseModel):
 
 
 class ViscaCfg(BaseModel):
-    """Zoom camera ảnh thường Sony FCB-EV9520L qua VISCA — cùng kiểu laser/ptz."""
+    """
+    FCB-EV9520L ảnh thường gồm 2 kết nối:
+      - video: /dev/video* → OpenCV (V4L2), KHÔNG dùng pyserial
+      - port:  /dev/ttyUSB* → VISCA zoom (pyserial)
+    """
 
     protocol: str = "visca"  # visca | sim
     # Giữ enabled để tương thích config cũ (enabled: false ≡ protocol: sim)
     enabled: bool = True
+    # Stream ảnh thường (capture card / CSI)
+    video: str | int | None = "/dev/video0"
+    # VISCA UART — chỉ tty/COM
     port: str = "/dev/ttyUSB0"
     baud: int = 9600
     parity: str = "none"  # none | even | odd — FCB board thường 8N1

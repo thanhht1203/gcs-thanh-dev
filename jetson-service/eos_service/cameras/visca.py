@@ -4,12 +4,15 @@ import threading
 import time
 
 from ..config import ViscaCfg
+from .ports import is_serial_port, is_video_device
 
 
 class ViscaController:
-    """Điều khiển zoom camera ảnh thường Sony FCB-EV9520L qua VISCA.
+    """
+    Zoom FCB-EV9520L qua VISCA (pyserial).
 
-    Cấu hình giống laser/ptz: protocol, port, baud, parity, address.
+    Anh thuong: OpenCV mo visca.video / cameras.visible (/dev/video*).
+    Neu gan nham /dev/video vao port → tu choi mo serial.
     """
 
     def __init__(self, cfg: ViscaCfg, sim: bool):
@@ -26,20 +29,32 @@ class ViscaController:
     def _cfg_is_sim(cfg: ViscaCfg) -> bool:
         if (cfg.protocol or "").lower() == "sim":
             return True
-        # Tương thích config cũ dùng enabled: false
         if hasattr(cfg, "enabled") and cfg.enabled is False:
             return True
         return False
 
     def _addr_byte(self) -> int:
-        # VISCA: camera address 1 → 0x81
         return 0x80 | max(1, min(7, int(self.cfg.address)))
 
     def _cmd(self, zoom_op: int) -> bytes:
-        # 8x 01 04 07 0p FF — p: 00 stop, 02 tele, 03 wide
         return bytes([self._addr_byte(), 0x01, 0x04, 0x07, zoom_op & 0xFF, 0xFF])
 
     def _open(self) -> None:
+        port = self.cfg.port
+        if is_video_device(port):
+            print(
+                f"[visca] port={port} is /dev/video — use OpenCV for video, "
+                f"not pyserial. VISCA zoom needs /dev/ttyUSB* or COM*. "
+                f"Set cameras.visible.device or visca.video = {port}"
+            )
+            self.sim = True
+            self._ser = None
+            return
+        if not is_serial_port(port):
+            print(f"[visca] port is not a serial UART ({port}) — skip VISCA zoom")
+            self.sim = True
+            self._ser = None
+            return
         try:
             import serial
 
@@ -50,7 +65,7 @@ class ViscaController:
                 parity = serial.PARITY_ODD
 
             self._ser = serial.Serial(
-                port=self.cfg.port,
+                port=str(port),
                 baudrate=self.cfg.baud,
                 bytesize=serial.EIGHTBITS,
                 parity=parity,
@@ -58,9 +73,9 @@ class ViscaController:
                 timeout=0.1,
             )
             bits = {"none": "8N1", "even": "8E1", "odd": "8O1"}.get(self.cfg.parity, "8N1")
-            print(f"[visca] FCB mở {self.cfg.port} @ {self.cfg.baud} {bits} addr={self.cfg.address}")
+            print(f"[visca] VISCA zoom mo {port} @ {self.cfg.baud} {bits} addr={self.cfg.address}")
         except Exception as exc:
-            print(f"[visca] Không mở {self.cfg.port}: {exc} — sim zoom")
+            print(f"[visca] Khong mo {port}: {exc} — sim zoom")
             self.sim = True
             self._ser = None
 
@@ -79,7 +94,6 @@ class ViscaController:
             self._stop_at = 0.0
 
     def tick(self) -> None:
-        """Gọi từ vòng lặp engine — tự dừng zoom sau pulse."""
         with self._lock:
             due = self._active and self._stop_at > 0 and time.perf_counter() >= self._stop_at
         if due:
@@ -110,7 +124,7 @@ class ViscaController:
                 else:
                     print(f"[visca] TX {name}: {command.hex(' ').upper()}")
         except Exception as exc:
-            print(f"[visca] Gửi lỗi: {exc}")
+            print(f"[visca] Gui loi: {exc}")
 
     def close(self) -> None:
         try:

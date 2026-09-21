@@ -209,6 +209,50 @@ class Engine:
         warnings: list[str] = []
         try:
             new_settings = merge_settings(self.settings, patch)
+            # Neu lo ghi /dev/video vao visca.port / satis.port → chuyen sang *.video (OpenCV)
+            from .cameras.ports import is_video_device
+
+            if is_video_device(new_settings.visca.port):
+                warnings.append(
+                    f"visca.port={new_settings.visca.port} la video — chuyen sang visca.video (OpenCV), "
+                    "VISCA zoom can /dev/ttyUSB*"
+                )
+                moved = new_settings.visca.port
+                new_settings = new_settings.model_copy(
+                    update={
+                        "visca": new_settings.visca.model_copy(
+                            update={"video": moved, "port": "/dev/ttyUSB0"}
+                        ),
+                        "cameras": new_settings.cameras.model_copy(
+                            update={
+                                "visible": new_settings.cameras.visible.model_copy(
+                                    update={"device": moved}
+                                )
+                            }
+                        ),
+                    }
+                )
+
+            if is_video_device(new_settings.satis.port):
+                warnings.append(
+                    f"satis.port={new_settings.satis.port} la video — chuyen sang satis.video (OpenCV), "
+                    "zoom RS422 can /dev/ttyUSB*"
+                )
+                moved = new_settings.satis.port
+                new_settings = new_settings.model_copy(
+                    update={
+                        "satis": new_settings.satis.model_copy(
+                            update={"video": moved, "port": "/dev/ttyUSB1"}
+                        ),
+                        "cameras": new_settings.cameras.model_copy(
+                            update={
+                                "thermal": new_settings.cameras.thermal.model_copy(
+                                    update={"device": moved}
+                                )
+                            }
+                        ),
+                    }
+                )
         except Exception as exc:
             return {
                 "type": "config",

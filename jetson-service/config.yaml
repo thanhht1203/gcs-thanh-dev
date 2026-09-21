@@ -14,14 +14,14 @@ platform:
 
 cameras:
   visible:
-    # FCB-EV9520L — kiểm tra: v4l2-ctl --list-devices
+    # FCB-EV9520L — OpenCV V4L2 (khong dung pyserial)
     device: /dev/video0
     width: 1280
     height: 720
     fps: 15
     backend: v4l2
   thermal:
-    # SATIS analog / USB capture
+    # SATIS analog — OpenCV V4L2 (khong dung pyserial)
     device: /dev/video1
     width: 640
     height: 512
@@ -30,18 +30,20 @@ cameras:
     colormap: false
     # rtsp: rtsp://192.168.1.64:554/stream1
 
-# Zoom ảnh thường FCB-EV9520L — VISCA (giống laser/ptz: protocol + port + address)
+# FCB: video = OpenCV /dev/video* ; port = VISCA zoom /dev/ttyUSB* (pyserial)
 visca:
   protocol: visca   # visca | sim
+  video: /dev/video0
   port: /dev/ttyUSB0
   baud: 9600
   parity: none
   address: 1
   zoom_pulse_s: 0.35
 
-# Zoom ảnh nhiệt SATIS — RS422 (cùng kiểu VISCA/laser: protocol + port + …)
+# SATIS: video = OpenCV /dev/video* ; port = RS422 zoom /dev/ttyUSB* (pyserial)
 satis:
   protocol: satis   # satis | sim
+  video: /dev/video1
   port: /dev/ttyUSB1
   baud: 9600
   parity: even

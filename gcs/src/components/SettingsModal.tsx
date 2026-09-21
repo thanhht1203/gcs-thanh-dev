@@ -432,15 +432,36 @@ export function SettingsModal() {
                 Windows: COMx.
               </p>
 
-              <h4>VISCA (ảnh thường FCB-EV9520L)</h4>
+              <h4>VISCA ảnh thường (FCB-EV9520L)</h4>
+              <p className="hint" style={{ gridColumn: "1 / -1" }}>
+                Video: OpenCV <code>/dev/video*</code> — không dùng pyserial. Zoom: VISCA UART{" "}
+                <code>/dev/ttyUSB*</code>.
+              </p>
               <Field label="Protocol">
                 <select value={str("visca.protocol") || "visca"} onChange={(e) => setVal("visca.protocol", e.target.value)}>
                   <option value="visca">visca</option>
                   <option value="sim">sim</option>
                 </select>
               </Field>
-              <Field label="Port">
-                <input value={str("visca.port")} onChange={(e) => setVal("visca.port", e.target.value)} />
+              <Field label="Video (/dev/video*)">
+                <input
+                  value={str("visca.video")}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    setVal("visca.video", /^\d+$/.test(v) ? Number(v) : v || null);
+                    if (v) {
+                      setVal("cameras.visible.device", /^\d+$/.test(v) ? Number(v) : v);
+                    }
+                  }}
+                  placeholder="/dev/video0"
+                />
+              </Field>
+              <Field label="Zoom port (VISCA)">
+                <input
+                  value={str("visca.port")}
+                  onChange={(e) => setVal("visca.port", e.target.value)}
+                  placeholder="/dev/ttyUSB0"
+                />
               </Field>
               <Field label="Baud">
                 <input type="number" value={num("visca.baud")} onChange={(e) => setVal("visca.baud", Number(e.target.value))} />
@@ -470,15 +491,36 @@ export function SettingsModal() {
                 />
               </Field>
 
-              <h4>SATIS (ảnh nhiệt)</h4>
+              <h4>SATIS ảnh nhiệt</h4>
+              <p className="hint" style={{ gridColumn: "1 / -1" }}>
+                Video: OpenCV <code>/dev/video*</code> — không dùng pyserial. Zoom: RS422{" "}
+                <code>/dev/ttyUSB*</code>.
+              </p>
               <Field label="Protocol">
                 <select value={str("satis.protocol") || "satis"} onChange={(e) => setVal("satis.protocol", e.target.value)}>
                   <option value="satis">satis</option>
                   <option value="sim">sim</option>
                 </select>
               </Field>
-              <Field label="Port">
-                <input value={str("satis.port")} onChange={(e) => setVal("satis.port", e.target.value)} />
+              <Field label="Video (/dev/video*)">
+                <input
+                  value={str("satis.video")}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    setVal("satis.video", /^\d+$/.test(v) ? Number(v) : v || null);
+                    if (v) {
+                      setVal("cameras.thermal.device", /^\d+$/.test(v) ? Number(v) : v);
+                    }
+                  }}
+                  placeholder="/dev/video1"
+                />
+              </Field>
+              <Field label="Zoom port (RS422)">
+                <input
+                  value={str("satis.port")}
+                  onChange={(e) => setVal("satis.port", e.target.value)}
+                  placeholder="/dev/ttyUSB1"
+                />
               </Field>
               <Field label="Baud">
                 <input type="number" value={num("satis.baud")} onChange={(e) => setVal("satis.baud", Number(e.target.value))} />

@@ -81,10 +81,31 @@ class CameraHub:
         self._th_src: FrameSource | None = None
         self._last = time.perf_counter()
         if not settings.sim:
-            self._vis_src = OpenCvSource(settings.cameras.visible)
-            self._th_src = OpenCvSource(settings.cameras.thermal)
+            self._vis_src = OpenCvSource(self._visible_cfg(settings))
+            self._th_src = OpenCvSource(self._thermal_cfg(settings))
         elif webcam:
-            self._vis_src = OpenCvSource(settings.cameras.visible)
+            self._vis_src = OpenCvSource(self._visible_cfg(settings))
+
+    @staticmethod
+    def _visible_cfg(settings: Settings) -> CamDevice:
+        """Ảnh thường FCB luôn mở bằng OpenCV. Ưu tiên visca.video nếu có."""
+        base = settings.cameras.visible
+        video = getattr(settings.visca, "video", None)
+        if video is None or video == "":
+            return base
+        return base.model_copy(update={"device": video})
+
+    @staticmethod
+    def _thermal_cfg(settings: Settings) -> CamDevice:
+        """
+        Ảnh nhiệt SATIS luôn mở bằng OpenCV.
+        Ưu tiên satis.video (/dev/video*) nếu có; không dùng pyserial.
+        """
+        base = settings.cameras.thermal
+        video = getattr(settings.satis, "video", None)
+        if video is None or video == "":
+            return base
+        return base.model_copy(update={"device": video})
 
     def _blank(self, w: int, h: int, label: str) -> np.ndarray:
         img = np.zeros((h, w, 3), np.uint8)
@@ -99,8 +120,12 @@ class CameraHub:
         fov_h: float,
         cam: CameraState,
     ) -> None:
-        vw, vh = quality_size(cam.quality, (self.settings.cameras.visible.width, self.settings.cameras.visible.height))
-        tw, th = self.settings.cameras.thermal.width, self.settings.cameras.thermal.height
+        vw, vh = quality_size(
+            cam.quality,
+            (self._visible_cfg(self.settings).width, self._visible_cfg(self.settings).height),
+        )
+        th_cfg = self._thermal_cfg(self.settings)
+        tw, th = th_cfg.width, th_cfg.height
         now = time.perf_counter()
         dt = max(0.001, now - self._last)
         self._last = now
@@ -127,7 +152,7 @@ class CameraHub:
                 vis = cv2.convertScaleAbs(vis, alpha=max(0.3, cam.contrast / 50.0), beta=int((cam.brightness - 50) * 1.4))
             if therm is not None:
                 therm = cv2.resize(therm, (tw, th))
-                if self.settings.cameras.thermal.colormap:
+                if th_cfg.colormap:
                     gray = cv2.cvtColor(therm, cv2.COLOR_BGR2GRAY) if therm.ndim == 3 else therm
                     therm = cv2.applyColorMap(gray, cv2.COLORMAP_INFERNO)
                 elif therm.ndim == 2:
@@ -170,7 +195,7 @@ class CameraHub:
         self.close()
         self.settings = settings
         if not settings.sim:
-            self._vis_src = OpenCvSource(settings.cameras.visible)
-            self._th_src = OpenCvSource(settings.cameras.thermal)
+            self._vis_src = OpenCvSource(self._visible_cfg(settings))
+            self._th_src = OpenCvSource(self._thermal_cfg(settings))
         elif self.webcam:
-            self._vis_src = OpenCvSource(settings.cameras.visible)
+            self._vis_src = OpenCvSource(self._visible_cfg(settings))

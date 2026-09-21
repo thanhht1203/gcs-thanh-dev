@@ -29,7 +29,8 @@ cameras:
 
 visca:
   protocol: visca   # visca | sim
-  port: COM27
+  video: 1          # EasyCap index — OpenCV
+  port: COM27       # VISCA UART
   baud: 9600
   parity: none
   address: 1
@@ -37,7 +38,8 @@ visca:
 
 satis:
   protocol: satis   # satis | sim
-  port: COM25
+  video: 2          # EasyCap index — OpenCV, không phải serial
+  port: COM25       # RS422 zoom
   baud: 9600
   parity: even
   zoom_speed: 0.5
