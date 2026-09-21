@@ -42,12 +42,29 @@ def _device_disabled(device: Any) -> bool:
     return s in ("", "none", "null", "off", "-1")
 
 
+def _fourcc_plan(cfg: CamDevice) -> list[str]:
+    """Thu MJPG truoc (HDMI/USB capture FCB), roi YUYV. Cam da co frame thi khong doi."""
+    preferred = (cfg.fourcc or "").strip().upper()
+    order = ["MJPG", "YUYV", "UYVY", ""]
+    if preferred and preferred not in ("AUTO", "ANY"):
+        order = [preferred] + [x for x in order if x != preferred]
+    # bo trung
+    seen: set[str] = set()
+    out: list[str] = []
+    for item in order:
+        if item in seen:
+            continue
+        seen.add(item)
+        out.append(item)
+    return out
+
+
 class OpenCvSource(FrameSource):
     """
     Doc camera o thread rieng.
 
-    Neu 1 cam (/dev/video0) bi V4L2 select() timeout, khong lam treo cam kia
-    va khong lam treo vong lap gui frame len GCS.
+    Neu 1 cam (/dev/video0) bi V4L2 select() timeout, khong lam treo cam kia.
+    FCB capture thu lai MJPG/YUYV vi mo duoc nhung khong co frame khi sai pixel format.
     """
 
     def __init__(self, cfg: CamDevice, name: str = "camera"):
@@ -62,53 +79,113 @@ class OpenCvSource(FrameSource):
         self._thread: threading.Thread | None = None
         self._fail_count = 0
         self._opened = False
+        self._got_frame = False
+        self._src: Any = cfg.rtsp if cfg.rtsp else cfg.device
+        self._api = None if cfg.rtsp else _opencv_api(cfg.backend)
+        self._formats = _fourcc_plan(cfg)
+        self._fmt_i = 0
+        self._force_size = True
+        self._exhausted = False
 
-        src: Any = cfg.rtsp if cfg.rtsp else cfg.device
-        if _device_disabled(src) and not cfg.rtsp:
+        if _device_disabled(self._src) and not cfg.rtsp:
             print(f"[{name}] device disabled — skip open")
             return
 
-        api = None if cfg.rtsp else _opencv_api(cfg.backend)
-        try:
-            if api is not None and not cfg.rtsp:
-                self.cap = cv2.VideoCapture(src, api)
-            else:
-                self.cap = cv2.VideoCapture(src)
-        except Exception as exc:
-            print(f"[{name}] open error {src}: {exc}")
-            self.cap = None
+        if not self._open_capture():
             return
-
-        if self.cap is None or not self.cap.isOpened():
-            print(f"[{name}] cannot open {src}")
-            self.cap = None
-            return
-
-        # Buffer nho de giam latency; khong bat buoc set size (USB capture hay fail)
-        try:
-            self.cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
-        except Exception:
-            pass
-        if cfg.width > 0:
-            self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, cfg.width)
-        if cfg.height > 0:
-            self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, cfg.height)
-        if cfg.fps > 0:
-            self.cap.set(cv2.CAP_PROP_FPS, cfg.fps)
-
-        w = int(self.cap.get(cv2.CAP_PROP_FRAME_WIDTH) or 0)
-        h = int(self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT) or 0)
-        fps = float(self.cap.get(cv2.CAP_PROP_FPS) or 0)
-        print(f"[{name}] opened {src} backend={cfg.backend} {w}x{h} @{fps:.1f}")
         self._opened = True
         self._thread = threading.Thread(target=self._loop, name=f"cam-{name}", daemon=True)
         self._thread.start()
+
+    def _open_capture(self) -> bool:
+        if self.cap is not None:
+            try:
+                self.cap.release()
+            except Exception:
+                pass
+            self.cap = None
+        try:
+            if self._api is not None and not self.cfg.rtsp:
+                self.cap = cv2.VideoCapture(self._src, self._api)
+            else:
+                self.cap = cv2.VideoCapture(self._src)
+        except Exception as exc:
+            print(f"[{self.name}] open error {self._src}: {exc}")
+            self.cap = None
+            return False
+        if self.cap is None or not self.cap.isOpened():
+            print(f"[{self.name}] cannot open {self._src}")
+            self.cap = None
+            return False
+        fourcc = self._formats[self._fmt_i] if self._formats else ""
+        self._tune(fourcc)
+        w = int(self.cap.get(cv2.CAP_PROP_FRAME_WIDTH) or 0)
+        h = int(self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT) or 0)
+        fps = float(self.cap.get(cv2.CAP_PROP_FPS) or 0)
+        label = fourcc or "default"
+        size = f"{w}x{h}" if self._force_size else "native"
+        print(f"[{self.name}] opened {self._src} backend={self.cfg.backend} fourcc={label} {size} {w}x{h} @{fps:.1f}")
+        return True
+
+    def _tune(self, fourcc: str) -> None:
+        cap = self.cap
+        if cap is None:
+            return
+        # Rut timeout mac dinh ~10s cua V4L2 select() xuong 1s (neu OpenCV ho tro)
+        for prop_name, ms in (("CAP_PROP_OPEN_TIMEOUT_MSEC", 2000), ("CAP_PROP_READ_TIMEOUT_MSEC", 1000)):
+            prop = getattr(cv2, prop_name, None)
+            if prop is not None:
+                try:
+                    cap.set(prop, ms)
+                except Exception:
+                    pass
+        try:
+            cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+        except Exception:
+            pass
+        if fourcc and len(fourcc) == 4:
+            try:
+                cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*fourcc))
+            except Exception:
+                pass
+        if self._force_size:
+            if self.cfg.width > 0:
+                cap.set(cv2.CAP_PROP_FRAME_WIDTH, self.cfg.width)
+            if self.cfg.height > 0:
+                cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self.cfg.height)
+        if self.cfg.fps > 0:
+            cap.set(cv2.CAP_PROP_FPS, self.cfg.fps)
+
+    def _try_next_format(self) -> None:
+        """Chua co frame: doi fourcc / bo ep resolution. Khong anh huong camera kia."""
+        if self._got_frame or self.cfg.rtsp:
+            return
+        if self._force_size:
+            self._force_size = False
+            print(f"[{self.name}] no frame — retry native resolution")
+            self._open_capture()
+            return
+        self._force_size = True
+        if self._fmt_i + 1 < len(self._formats):
+            self._fmt_i += 1
+            print(f"[{self.name}] no frame — retry fourcc {self._formats[self._fmt_i] or 'default'}")
+            self._open_capture()
+            return
+        if not self._exhausted:
+            self._exhausted = True
+            print(
+                f"[{self.name}] still no frame on {self._src}. "
+                f"Kiem tra node that: v4l2-ctl --list-devices (FCB co the khong phai /dev/video0)"
+            )
 
     def _loop(self) -> None:
         consecutive = 0
         while not self._stop.is_set():
             if self.cap is None or not self.cap.isOpened():
-                break
+                time.sleep(0.5)
+                if not self._got_frame and not self._exhausted:
+                    self._try_next_format()
+                continue
             try:
                 ok, frame = self.cap.read()
             except Exception as exc:
@@ -116,6 +193,7 @@ class OpenCvSource(FrameSource):
                 ok, frame = False, None
             if ok and frame is not None:
                 consecutive = 0
+                self._got_frame = True
                 with self._lock:
                     self._frame = frame
                     self._fail_count = 0
@@ -123,17 +201,12 @@ class OpenCvSource(FrameSource):
                 consecutive += 1
                 with self._lock:
                     self._fail_count = consecutive
-                # V4L2 timeout ~10s — tranh spam; cho nghi ngan
-                if consecutive >= 3:
-                    time.sleep(0.2)
-                else:
-                    time.sleep(0.01)
-                if consecutive == 3:
-                    print(f"[{self.name}] no frame (device may be disconnected) — keep other cameras running")
-                if consecutive >= 30:
-                    # Dung doc de khong treo CPU/ioctl mai
-                    print(f"[{self.name}] giving up reads after repeated failures")
-                    break
+                if not self._got_frame and not self._exhausted and consecutive >= 1:
+                    consecutive = 0
+                    self._try_next_format()
+                elif consecutive == 3:
+                    print(f"[{self.name}] lost frames — keep other cameras running")
+                time.sleep(0.05)
 
     def read(self) -> np.ndarray | None:
         """Tra frame moi nhat ngay lap tuc (khong block)."""

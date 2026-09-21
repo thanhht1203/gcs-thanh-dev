@@ -30,6 +30,8 @@ class CamDevice(BaseModel):
     rtsp: str | None = None
     # auto | dshow | v4l2 | any — EasyCap trên Windows dùng dshow
     backend: str = "auto"
+    # MJPG | YUYV | UYVY | để trống = tự thử (FCB capture hay cần MJPG)
+    fourcc: str = ""
     # false = giữ nguyên frame (SATIS analog qua EasyCap)
     colormap: bool = True
 

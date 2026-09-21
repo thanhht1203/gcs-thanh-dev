@@ -14,12 +14,13 @@ platform:
 
 cameras:
   visible:
-    # FCB — neu /dev/video0 bi timeout (khong co tin hieu), dat "none" de khong treo
+    # FCB-EV9520L — HDMI/USB capture. MJPG neu select() timeout o /dev/video0
     device: /dev/video0
     width: 1280
     height: 720
     fps: 15
     backend: v4l2
+    fourcc: MJPG
   thermal:
     # SATIS analog — OpenCV V4L2
     device: /dev/video2
