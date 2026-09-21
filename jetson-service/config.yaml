@@ -14,36 +14,35 @@ platform:
 
 cameras:
   visible:
-    # FCB-EV9520L — OpenCV V4L2 (khong dung pyserial)
+    # FCB — neu /dev/video0 bi timeout (khong co tin hieu), dat "none" de khong treo
     device: /dev/video0
     width: 1280
     height: 720
     fps: 15
     backend: v4l2
   thermal:
-    # SATIS analog — OpenCV V4L2 (khong dung pyserial)
-    device: /dev/video1
+    # SATIS analog — OpenCV V4L2
+    device: /dev/video2
     width: 640
-    height: 512
-    fps: 15
+    height: 480
+    fps: 30
     backend: v4l2
     colormap: false
-    # rtsp: rtsp://192.168.1.64:554/stream1
 
-# FCB: video = OpenCV /dev/video* ; port = VISCA zoom /dev/ttyUSB* (pyserial)
+# FCB: video OpenCV ; port VISCA UART
 visca:
-  protocol: visca   # visca | sim
-  video: /dev/video0
+  protocol: visca
+  video: /dev/video0   # hoac "none" neu chua cam FCB
   port: /dev/ttyUSB0
   baud: 9600
   parity: none
   address: 1
   zoom_pulse_s: 0.35
 
-# SATIS: video = OpenCV /dev/video* ; port = RS422 zoom /dev/ttyUSB* (pyserial)
+# SATIS: video OpenCV ; port RS422 zoom
 satis:
-  protocol: satis   # satis | sim
-  video: /dev/video1
+  protocol: satis
+  video: /dev/video2
   port: /dev/ttyUSB1
   baud: 9600
   parity: even

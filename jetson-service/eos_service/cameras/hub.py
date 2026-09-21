@@ -30,42 +30,131 @@ def _opencv_api(backend: str) -> int | None:
         return getattr(cv2, "CAP_V4L2", None)
     if b == "any":
         return getattr(cv2, "CAP_ANY", 0)
-    # auto: Windows + device index → DirectShow (EasyCap)
     if sys.platform.startswith("win"):
         return getattr(cv2, "CAP_DSHOW", None)
     return None
 
 
+def _device_disabled(device: Any) -> bool:
+    if device is None:
+        return True
+    s = str(device).strip().lower()
+    return s in ("", "none", "null", "off", "-1")
+
+
 class OpenCvSource(FrameSource):
-    def __init__(self, cfg: CamDevice):
+    """
+    Doc camera o thread rieng.
+
+    Neu 1 cam (/dev/video0) bi V4L2 select() timeout, khong lam treo cam kia
+    va khong lam treo vong lap gui frame len GCS.
+    """
+
+    def __init__(self, cfg: CamDevice, name: str = "camera"):
         self.cfg = cfg
+        self.name = name
         self.fallback_w = cfg.width
         self.fallback_h = cfg.height
         self.cap = None
+        self._lock = threading.Lock()
+        self._frame: np.ndarray | None = None
+        self._stop = threading.Event()
+        self._thread: threading.Thread | None = None
+        self._fail_count = 0
+        self._opened = False
+
         src: Any = cfg.rtsp if cfg.rtsp else cfg.device
+        if _device_disabled(src) and not cfg.rtsp:
+            print(f"[{name}] device disabled — skip open")
+            return
+
         api = None if cfg.rtsp else _opencv_api(cfg.backend)
-        if api is not None and not cfg.rtsp:
-            self.cap = cv2.VideoCapture(src, api)
-        else:
-            self.cap = cv2.VideoCapture(src)
-        if self.cap is not None and self.cap.isOpened():
+        try:
+            if api is not None and not cfg.rtsp:
+                self.cap = cv2.VideoCapture(src, api)
+            else:
+                self.cap = cv2.VideoCapture(src)
+        except Exception as exc:
+            print(f"[{name}] open error {src}: {exc}")
+            self.cap = None
+            return
+
+        if self.cap is None or not self.cap.isOpened():
+            print(f"[{name}] cannot open {src}")
+            self.cap = None
+            return
+
+        # Buffer nho de giam latency; khong bat buoc set size (USB capture hay fail)
+        try:
+            self.cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+        except Exception:
+            pass
+        if cfg.width > 0:
             self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, cfg.width)
+        if cfg.height > 0:
             self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, cfg.height)
+        if cfg.fps > 0:
             self.cap.set(cv2.CAP_PROP_FPS, cfg.fps)
-            print(f"[camera] opened {src} backend={cfg.backend}")
-        else:
-            print(f"[camera] không mở được {src}")
+
+        w = int(self.cap.get(cv2.CAP_PROP_FRAME_WIDTH) or 0)
+        h = int(self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT) or 0)
+        fps = float(self.cap.get(cv2.CAP_PROP_FPS) or 0)
+        print(f"[{name}] opened {src} backend={cfg.backend} {w}x{h} @{fps:.1f}")
+        self._opened = True
+        self._thread = threading.Thread(target=self._loop, name=f"cam-{name}", daemon=True)
+        self._thread.start()
+
+    def _loop(self) -> None:
+        consecutive = 0
+        while not self._stop.is_set():
+            if self.cap is None or not self.cap.isOpened():
+                break
+            try:
+                ok, frame = self.cap.read()
+            except Exception as exc:
+                print(f"[{self.name}] read error: {exc}")
+                ok, frame = False, None
+            if ok and frame is not None:
+                consecutive = 0
+                with self._lock:
+                    self._frame = frame
+                    self._fail_count = 0
+            else:
+                consecutive += 1
+                with self._lock:
+                    self._fail_count = consecutive
+                # V4L2 timeout ~10s — tranh spam; cho nghi ngan
+                if consecutive >= 3:
+                    time.sleep(0.2)
+                else:
+                    time.sleep(0.01)
+                if consecutive == 3:
+                    print(f"[{self.name}] no frame (device may be disconnected) — keep other cameras running")
+                if consecutive >= 30:
+                    # Dung doc de khong treo CPU/ioctl mai
+                    print(f"[{self.name}] giving up reads after repeated failures")
+                    break
 
     def read(self) -> np.ndarray | None:
-        if self.cap is None or not self.cap.isOpened():
-            return None
-        ok, frame = self.cap.read()
-        return frame if ok else None
+        """Tra frame moi nhat ngay lap tuc (khong block)."""
+        with self._lock:
+            if self._frame is None:
+                return None
+            return self._frame.copy()
 
     def close(self) -> None:
+        self._stop.set()
+        if self._thread and self._thread.is_alive():
+            self._thread.join(timeout=1.5)
+        self._thread = None
         if self.cap is not None:
-            self.cap.release()
+            try:
+                self.cap.release()
+            except Exception:
+                pass
             self.cap = None
+        with self._lock:
+            self._frame = None
 
 
 class CameraHub:
@@ -81,14 +170,13 @@ class CameraHub:
         self._th_src: FrameSource | None = None
         self._last = time.perf_counter()
         if not settings.sim:
-            self._vis_src = OpenCvSource(self._visible_cfg(settings))
-            self._th_src = OpenCvSource(self._thermal_cfg(settings))
+            self._vis_src = OpenCvSource(self._visible_cfg(settings), "visible")
+            self._th_src = OpenCvSource(self._thermal_cfg(settings), "thermal")
         elif webcam:
-            self._vis_src = OpenCvSource(self._visible_cfg(settings))
+            self._vis_src = OpenCvSource(self._visible_cfg(settings), "visible")
 
     @staticmethod
     def _visible_cfg(settings: Settings) -> CamDevice:
-        """Ảnh thường FCB luôn mở bằng OpenCV. Ưu tiên visca.video nếu có."""
         base = settings.cameras.visible
         video = getattr(settings.visca, "video", None)
         if video is None or video == "":
@@ -97,10 +185,6 @@ class CameraHub:
 
     @staticmethod
     def _thermal_cfg(settings: Settings) -> CamDevice:
-        """
-        Ảnh nhiệt SATIS luôn mở bằng OpenCV.
-        Ưu tiên satis.video (/dev/video*) nếu có; không dùng pyserial.
-        """
         base = settings.cameras.thermal
         video = getattr(settings.satis, "video", None)
         if video is None or video == "":
@@ -120,11 +204,9 @@ class CameraHub:
         fov_h: float,
         cam: CameraState,
     ) -> None:
-        vw, vh = quality_size(
-            cam.quality,
-            (self._visible_cfg(self.settings).width, self._visible_cfg(self.settings).height),
-        )
+        vis_cfg = self._visible_cfg(self.settings)
         th_cfg = self._thermal_cfg(self.settings)
+        vw, vh = quality_size(cam.quality, (vis_cfg.width, vis_cfg.height))
         tw, th = th_cfg.width, th_cfg.height
         now = time.perf_counter()
         dt = max(0.001, now - self._last)
@@ -149,7 +231,9 @@ class CameraHub:
                 therm = self._th_src.read()
             if vis is not None:
                 vis = cv2.resize(vis, (vw, vh))
-                vis = cv2.convertScaleAbs(vis, alpha=max(0.3, cam.contrast / 50.0), beta=int((cam.brightness - 50) * 1.4))
+                vis = cv2.convertScaleAbs(
+                    vis, alpha=max(0.3, cam.contrast / 50.0), beta=int((cam.brightness - 50) * 1.4)
+                )
             if therm is not None:
                 therm = cv2.resize(therm, (tw, th))
                 if th_cfg.colormap:
@@ -189,13 +273,12 @@ class CameraHub:
             self._th_src = None
 
     def reconfigure(self, settings: Settings, webcam: bool | None = None) -> None:
-        """Đóng và mở lại camera theo config mới (hot-apply)."""
         if webcam is not None:
             self.webcam = webcam
         self.close()
         self.settings = settings
         if not settings.sim:
-            self._vis_src = OpenCvSource(self._visible_cfg(settings))
-            self._th_src = OpenCvSource(self._thermal_cfg(settings))
+            self._vis_src = OpenCvSource(self._visible_cfg(settings), "visible")
+            self._th_src = OpenCvSource(self._thermal_cfg(settings), "thermal")
         elif self.webcam:
-            self._vis_src = OpenCvSource(self._visible_cfg(settings))
+            self._vis_src = OpenCvSource(self._visible_cfg(settings), "visible")
