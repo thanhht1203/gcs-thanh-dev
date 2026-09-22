@@ -70,6 +70,8 @@ class SystemState:
     detect_on: bool = True
     track_on: bool = False
     track_id: int | None = None
+    ai_ok: bool = False
+    ai_model: str | None = None
     roi: tuple[float, float, float, float] | None = None  # x,y,w,h norm
     recording: bool = False
     detections: list[Detection] = field(default_factory=list)
@@ -93,6 +95,8 @@ class SystemState:
             "detect_on": self.detect_on,
             "track_on": self.track_on,
             "track_id": self.track_id,
+            "ai_ok": self.ai_ok,
+            "ai_model": self.ai_model,
             "roi": list(self.roi) if self.roi else None,
             "recording": self.recording,
             "detections": [d.to_dict() for d in self.detections],

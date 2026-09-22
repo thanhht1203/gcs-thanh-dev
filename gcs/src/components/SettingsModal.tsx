@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { useStore, type GcsLayout } from "../store";
-import { requestConfig } from "../ws";
+import { useStore, type DefaultViewMode, type GcsLayout, applyViewMode } from "../store";
+import { requestConfig, send } from "../ws";
 
 type Tab = "gcs" | "service" | "platform" | "cameras" | "serial" | "ai" | "optics";
 
@@ -51,7 +51,6 @@ export function SettingsModal() {
   const setUrl = useStore((s) => s.setUrl);
   const layout = useStore((s) => s.layout);
   const setLayout = useStore((s) => s.setLayout);
-  const setMainView = useStore((s) => s.setMainView);
   const connected = useStore((s) => s.connected);
   const setConfigStatus = useStore((s) => s.setConfigStatus);
 
@@ -122,7 +121,9 @@ export function SettingsModal() {
   const saveGcs = () => {
     setUrl(urlDraft.trim());
     setLayout(layoutDraft);
-    setMainView(layoutDraft.defaultMainView);
+    applyViewMode(layoutDraft.defaultViewMode);
+    const main = layoutDraft.defaultViewMode === "visible" ? "visible" : "thermal";
+    send({ type: "view", main });
     setMsg("Đã lưu cấu hình GCS (localStorage)");
     setConfigStatus("GCS đã lưu");
   };
@@ -209,18 +210,19 @@ export function SettingsModal() {
                   }
                 />
               </Field>
-              <Field label="Màn hình chính mặc định">
+              <Field label="Chế độ xem mặc định">
                 <select
-                  value={layoutDraft.defaultMainView}
+                  value={layoutDraft.defaultViewMode}
                   onChange={(e) =>
                     setLayoutDraft({
                       ...layoutDraft,
-                      defaultMainView: e.target.value as "visible" | "thermal",
+                      defaultViewMode: e.target.value as DefaultViewMode,
                     })
                   }
                 >
-                  <option value="visible">Ảnh thường</option>
-                  <option value="thermal">Ảnh nhiệt</option>
+                  <option value="visible">1 · Ảnh thường (+ PiP nhiệt nếu bật)</option>
+                  <option value="thermal_pip">2 · Ảnh nhiệt + PiP ảnh thường</option>
+                  <option value="thermal_only">3 · Chỉ ảnh nhiệt</option>
                 </select>
               </Field>
               <label className="cfg-check">
@@ -229,7 +231,7 @@ export function SettingsModal() {
                   checked={layoutDraft.showPip}
                   onChange={(e) => setLayoutDraft({ ...layoutDraft, showPip: e.target.checked })}
                 />
-                Hiện PiP camera phụ
+                Khi ảnh thường: hiện PiP ảnh nhiệt đè ≈1/6
               </label>
               <label className="cfg-check">
                 <input
@@ -239,7 +241,10 @@ export function SettingsModal() {
                 />
                 Hiện bản đồ
               </label>
-              <p className="hint">Cấu hình GCS lưu trên máy này (localStorage), không gửi lên Jetson.</p>
+              <p className="hint">
+                Tab GCS lưu trên máy này (localStorage). Phím tắt: 1 thường · 2 nhiệt+PiP · 3 chỉ nhiệt · 0 tắt/bật PiP.
+                Lưu sẽ áp dụng ngay chế độ xem mặc định.
+              </p>
             </div>
           )}
 

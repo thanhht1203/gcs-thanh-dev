@@ -23,8 +23,26 @@ class Detector:
         self.sim = sim
         self.model = None
         self.ok = False
+        self._device = cfg.device
         if not sim:
             self._load()
+
+    def _resolve_device(self):
+        """Jetson: device 0 (GPU). Lab CPU: tự chuyển 'cpu' nếu không có CUDA."""
+        want = self.cfg.device
+        try:
+            import torch
+
+            if want in (None, "", "cpu"):
+                return "cpu"
+            if isinstance(want, str) and want.lower() == "cpu":
+                return "cpu"
+            if not torch.cuda.is_available():
+                print(f"[ai] CUDA không có — dùng cpu (config device={want})")
+                return "cpu"
+            return want
+        except Exception:
+            return "cpu" if want in (None, "", "cpu") or (isinstance(want, str) and want.lower() == "cpu") else want
 
     def _load(self) -> None:
         self.model = None
@@ -34,9 +52,10 @@ class Detector:
         try:
             from ultralytics import YOLO
 
+            self._device = self._resolve_device()
             self.model = YOLO(self.cfg.model)
             self.ok = True
-            print(f"[ai] Loaded {self.cfg.model}")
+            print(f"[ai] Loaded {self.cfg.model} device={self._device}")
         except Exception as exc:
             print(f"[ai] Không tải được YOLO ({exc}). Dùng detector rỗng.")
             self.model = None
@@ -56,6 +75,8 @@ class Detector:
             return
         if need_reload:
             self._load()
+        else:
+            self._device = self._resolve_device()
 
     def infer(self, frame: np.ndarray, roi: tuple[float, float, float, float] | None) -> list[Detection]:
         if self.model is None or frame is None:
@@ -72,25 +93,29 @@ class Detector:
             if x2 > x1 + 4 and y2 > y1 + 4:
                 crop = frame[y1:y2, x1:x2]
                 ox, oy = x1 / w, y1 / h
+        kwargs = dict(
+            conf=self.cfg.conf,
+            imgsz=self.cfg.imgsz,
+            classes=self.cfg.classes,
+            verbose=False,
+            device=self._device,
+        )
         try:
-            results = self.model.track(
-                crop,
-                persist=True,
-                conf=self.cfg.conf,
-                imgsz=self.cfg.imgsz,
-                classes=self.cfg.classes,
-                verbose=False,
-                device=self.cfg.device,
-            )
-        except Exception:
-            results = self.model.predict(
-                crop,
-                conf=self.cfg.conf,
-                imgsz=self.cfg.imgsz,
-                classes=self.cfg.classes,
-                verbose=False,
-                device=self.cfg.device,
-            )
+            results = self.model.track(crop, persist=True, **kwargs)
+        except Exception as exc:
+            msg = str(exc).lower()
+            if "cuda" in msg or "device" in msg:
+                self._device = "cpu"
+                kwargs["device"] = "cpu"
+                try:
+                    results = self.model.track(crop, persist=True, **kwargs)
+                except Exception:
+                    results = self.model.predict(crop, **kwargs)
+            else:
+                try:
+                    results = self.model.predict(crop, **kwargs)
+                except Exception:
+                    return []
         dets: list[Detection] = []
         if not results:
             return dets
@@ -98,7 +123,6 @@ class Detector:
         boxes = getattr(r, "boxes", None)
         if boxes is None:
             return dets
-        ch, cw = crop.shape[:2]
         for i, b in enumerate(boxes):
             xyxy = b.xyxy[0].tolist()
             cls_id = int(b.cls[0]) if b.cls is not None else 0

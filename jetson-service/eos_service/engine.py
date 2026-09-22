@@ -71,6 +71,8 @@ class Engine:
         self.visca = ViscaController(settings.visca, settings.sim)
         self.nav = GpsCompass(settings, settings.sim)
         self.detector = Detector(settings.ai, settings.sim)
+        self.state.ai_ok = bool(self.detector.ok)
+        self.state.ai_model = settings.ai.model if self.detector.ok else None
         self.recorder = Recorder(settings.record.dir, settings.record.fourcc)
         self.clients: set[WebSocket] = set()
         self._stop = asyncio.Event()
@@ -290,6 +292,8 @@ class Engine:
                 self.visca.reconfigure(new_settings.visca, new_settings.sim)
                 self.nav.reconfigure(new_settings, new_settings.sim)
                 self.detector.reconfigure(new_settings.ai, new_settings.sim)
+                self.state.ai_ok = bool(self.detector.ok)
+                self.state.ai_model = new_settings.ai.model if self.detector.ok else None
                 self.recorder.reconfigure(new_settings.record.dir, new_settings.record.fourcc)
                 if self.state.recording:
                     self.state.recording = False
@@ -495,7 +499,14 @@ def create_app(engine: Engine) -> FastAPI:
 
     @app.get("/health")
     def health():
-        return {"ok": True, "sim": engine.settings.sim, "clients": len(engine.clients)}
+        return {
+            "ok": True,
+            "sim": engine.settings.sim,
+            "clients": len(engine.clients),
+            "ai_ok": bool(engine.detector.ok),
+            "ai_model": engine.settings.ai.model if engine.detector.ok else None,
+            "detect_on": engine.state.detect_on,
+        }
 
     @app.get("/config")
     def get_config():

@@ -18,6 +18,16 @@ export function AiPanel() {
   return (
     <section className="panel">
       <h3>PHÁT HIỆN · BÁM MỤC TIÊU</h3>
+      <p className="hint">
+        AI{" "}
+        {tel.ai_ok ? (
+          <span className="ok">YOLO {tel.ai_model || "ready"}</span>
+        ) : tel.sim ? (
+          <span className="warn">SIM (chưa load model)</span>
+        ) : (
+          <span className="warn">chưa load model — cài yolov8n trên Jetson</span>
+        )}
+      </p>
       <div className="row">
         <button
           className={tel.detect_on ? "on" : ""}

@@ -25,6 +25,8 @@ export default function App() {
   const ir = useStore((s) => s.thermalUrl);
   const main = useStore((s) => s.mainView);
   const setMain = useStore((s) => s.setMainView);
+  const thermalSolo = useStore((s) => s.thermalSolo);
+  const setThermalSolo = useStore((s) => s.setThermalSolo);
   const [draft, setDraft] = useState(url);
 
   useEffect(() => {
@@ -32,7 +34,39 @@ export default function App() {
   }, [url]);
 
   const mainSrc = main === "visible" ? vis : ir;
-  const pipSrc = main === "visible" ? ir : vis;
+  const showThermalPip = main === "visible" && layout.showPip;
+  const showVisiblePip = main === "thermal" && !thermalSolo;
+
+  const goVisible = (withPip = true) => {
+    setMain("visible");
+    setThermalSolo(false);
+    send({ type: "view", main: "visible" });
+    if (withPip && !layout.showPip) useStore.getState().setLayout({ showPip: true });
+  };
+
+  /** Ảnh nhiệt full + vẫn hiện PiP ảnh thường để quay lại. */
+  const goThermalWithPip = () => {
+    setMain("thermal");
+    setThermalSolo(false);
+    send({ type: "view", main: "thermal" });
+  };
+
+  /** Chỉ ảnh nhiệt — không đè ảnh thường. */
+  const goThermalOnly = () => {
+    setMain("thermal");
+    setThermalSolo(true);
+    send({ type: "view", main: "thermal" });
+  };
+
+  const hideThermal = () => {
+    useStore.getState().setLayout({ showPip: false });
+    if (main === "thermal") goVisible(false);
+  };
+
+  const showThermal = () => {
+    useStore.getState().setLayout({ showPip: true });
+    if (main !== "visible") goVisible(true);
+  };
 
   return (
     <div
@@ -95,24 +129,86 @@ export default function App() {
 
       <div className="body">
         <div className="col-main">
-          <VideoStage
-            src={mainSrc}
-            thermal={main === "thermal"}
-            interactive
-            label={main === "visible" ? "ẢNH THƯỜNG" : "ẢNH NHIỆT"}
-          />
-          <div className="bottom">
-            {layout.showPip && (
-              <div className="pip" onClick={() => setMain(main === "visible" ? "thermal" : "visible")}>
-                <VideoStage
-                  src={pipSrc}
-                  thermal={main === "visible"}
-                  label={main === "visible" ? "ẢNH NHIỆT" : "ẢNH THƯỜNG"}
-                />
+          <div className="stage-wrap">
+            <VideoStage
+              src={mainSrc}
+              thermal={main === "thermal"}
+              interactive
+              label={main === "visible" ? "ẢNH THƯỜNG" : "ẢNH NHIỆT"}
+            />
+            {showThermalPip && (
+              <div className="view-pip">
+                <div
+                  className="view-pip-frame"
+                  title="Phóng to ảnh nhiệt (còn PiP ảnh thường)"
+                  role="button"
+                  tabIndex={0}
+                  onClick={goThermalWithPip}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      goThermalWithPip();
+                    }
+                  }}
+                >
+                  <VideoStage src={ir} thermal compact label="ẢNH NHIỆT" />
+                </div>
+                <div className="view-pip-bar">
+                  <button type="button" onClick={goThermalWithPip}>
+                    Phóng to
+                  </button>
+                  <button type="button" onClick={goThermalOnly}>
+                    Chỉ nhiệt
+                  </button>
+                  <button type="button" onClick={hideThermal}>
+                    Tắt
+                  </button>
+                </div>
               </div>
             )}
-            {layout.showMap && <MapPanel />}
+            {showVisiblePip && (
+              <div className="view-pip">
+                <div
+                  className="view-pip-frame"
+                  title="Quay lại ảnh thường"
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => goVisible(true)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      goVisible(true);
+                    }
+                  }}
+                >
+                  <VideoStage src={vis} compact label="ẢNH THƯỜNG" />
+                </div>
+                <div className="view-pip-bar">
+                  <button type="button" className="on" onClick={() => goVisible(true)}>
+                    ← Ảnh thường
+                  </button>
+                  <button type="button" onClick={goThermalOnly}>
+                    Chỉ nhiệt
+                  </button>
+                </div>
+              </div>
+            )}
+            {main === "thermal" && thermalSolo && (
+              <div className="thermal-solo-bar">
+                <button type="button" className="on" onClick={() => goVisible(true)}>
+                  ← Ảnh thường
+                </button>
+                <button type="button" onClick={goThermalWithPip}>
+                  Hiện PiP thường
+                </button>
+              </div>
+            )}
           </div>
+          {layout.showMap && (
+            <div className="bottom">
+              <MapPanel />
+            </div>
+          )}
         </div>
         <aside className="col-side">
           <PtzPanel />
@@ -135,23 +231,31 @@ export default function App() {
         </span>
         <span>{tel.detections.length} mục tiêu</span>
         <span className="grow" />
-        <button
-          className="ghost"
-          onClick={() => {
-            setMain("visible");
-            send({ type: "view", main: "visible" });
-          }}
-        >
+        <button className={`ghost${main === "visible" ? " on" : ""}`} onClick={() => goVisible(true)}>
           1 Ảnh thường
         </button>
+        {layout.showPip || main === "thermal" ? (
+          <button className="ghost" onClick={hideThermal}>
+            Tắt nhiệt
+          </button>
+        ) : (
+          <button className="ghost" onClick={showThermal}>
+            Hiện nhiệt
+          </button>
+        )}
         <button
-          className="ghost"
-          onClick={() => {
-            setMain("thermal");
-            send({ type: "view", main: "thermal" });
-          }}
+          className={`ghost${main === "thermal" && !thermalSolo ? " on" : ""}`}
+          onClick={goThermalWithPip}
+          title="Ảnh nhiệt lớn + PiP ảnh thường"
         >
-          2 Ảnh nhiệt
+          2 Nhiệt + PiP
+        </button>
+        <button
+          className={`ghost${main === "thermal" && thermalSolo ? " on" : ""}`}
+          onClick={goThermalOnly}
+          title="Chỉ ảnh nhiệt, không đè ảnh thường"
+        >
+          3 Chỉ nhiệt
         </button>
       </footer>
 

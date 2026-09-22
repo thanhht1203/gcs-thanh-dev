@@ -5,7 +5,8 @@ Cách dùng (từ thư mục gốc repo):
 
   py -3 scripts/deploy-jetson.py
   py -3 scripts/deploy-jetson.py --host 192.168.1.16 --user thanh
-  py -3 scripts/deploy-jetson.py --deps          # pip install lại requirements
+  py -3 scripts/deploy-jetson.py --deps          # pip install requirements-jetson.txt
+  py -3 scripts/deploy-jetson.py --ai            # deps + tải yolov8n.pt + sim:false
   py -3 scripts/deploy-jetson.py --include-config  # ghi đè cả config.yaml
 
 Mật khẩu: biến môi trường JETSON_PASSWORD, hoặc nhập khi chạy.
@@ -104,7 +105,8 @@ def main() -> int:
     p.add_argument("--user", default=os.environ.get("JETSON_USER", "thanh"))
     p.add_argument("--remote", default=os.environ.get("JETSON_REMOTE", REMOTE_DEFAULT))
     p.add_argument("--include-config", action="store_true", help="Ghi đè config.yaml trên Jetson")
-    p.add_argument("--deps", action="store_true", help="pip install -r requirements.txt")
+    p.add_argument("--deps", action="store_true", help="pip install -r requirements-jetson.txt (gồm ultralytics)")
+    p.add_argument("--ai", action="store_true", help="Cài AI deps + tải yolov8n.pt + đảm bảo sim:false rồi restart")
     p.add_argument("--no-restart", action="store_true")
     p.add_argument("--sim", action="store_true", help="Chạy service với --sim (cập nhật unit)")
     args = p.parse_args()
@@ -134,10 +136,33 @@ def main() -> int:
             sftp.close()
         print(f"Đã upload {n} file → {args.user}@{args.host}:{args.remote}")
 
-        if args.deps:
-            code = run(client, f"cd {args.remote} && .venv/bin/pip install -r requirements.txt", timeout=900)
+        if args.deps or args.ai:
+            code = run(client, f"cd {args.remote} && .venv/bin/pip install -r requirements-jetson.txt", timeout=1200)
             if code != 0:
                 return code
+
+        if args.ai:
+            code = run(
+                client,
+                f"cd {args.remote} && .venv/bin/python -c \"from ultralytics import YOLO; YOLO('yolov8n.pt'); print('yolov8n.pt OK')\"",
+                timeout=600,
+            )
+            if code != 0:
+                return code
+            # sim: false + model path
+            run(
+                client,
+                f"cd {args.remote} && .venv/bin/python - <<'PY'\n"
+                "import re, pathlib\n"
+                "p=pathlib.Path('config.yaml')\n"
+                "t=p.read_text(encoding='utf-8')\n"
+                "t=re.sub(r'(?m)^sim:\\s*\\S+', 'sim: false', t, count=1)\n"
+                "t=re.sub(r'(?m)^(\\s*)model:\\s*.*$', r'\\1model: yolov8n.pt', t, count=1)\n"
+                "t=re.sub(r'(?m)^(\\s*)use_ultralytics:\\s*.*$', r'\\1use_ultralytics: true', t, count=1)\n"
+                "p.write_text(t, encoding='utf-8')\n"
+                "print('config AI ok')\n"
+                "PY",
+            )
 
         if args.sim:
             unit = f"""[Unit]
@@ -163,9 +188,12 @@ WantedBy=multi-user.target
 
         if not args.no_restart:
             run(client, "sudo systemctl restart eo-service", password=password)
-            time.sleep(2)
+            time.sleep(3)
             run(client, "sudo systemctl is-active eo-service", password=password)
             run(client, "curl -s http://127.0.0.1:8765/health || true")
+            if args.ai:
+                run(client, "sudo journalctl -u eo-service -n 30 --no-pager | grep -E '\\[ai\\]|Error|Traceback' || true", password=password)
+                run(client, f"cd {args.remote} && .venv/bin/python -m eos_service.hw_test --config {args.remote}/config.yaml ai", timeout=180)
 
         print("Xong.")
         return 0

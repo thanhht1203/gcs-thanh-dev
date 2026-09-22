@@ -101,15 +101,35 @@ sudo systemctl start eo-service
 
 ## YOLO / TensorRT
 
+Model mặc định: **YOLOv8n** (`ai.model: yolov8n.pt`) — phù hợp Orin Nano.
+
+Từ PC (Jetson online):
+
 ```bash
+py -3 scripts/setup-jetson-ai.py
+# hoặc
+py -3 scripts/deploy-jetson.py --ai
+```
+
+Trên Jetson:
+
+```bash
+cd ~/eo-control/jetson-service
+source .venv/bin/activate
 pip install -r requirements-jetson.txt
 python -c "from ultralytics import YOLO; YOLO('yolov8n.pt')"
+# config.yaml: sim: false, ai.use_ultralytics: true
+sudo systemctl restart eo-service
+curl -s http://127.0.0.1:8765/health   # ai_ok:true
+python -m eos_service.hw_test ai
 ```
 
 ```bash
 yolo export model=yolov8n.pt format=engine device=0
 # ai.model: yolov8n.engine trong config.yaml
 ```
+
+GCS: panel **Phát hiện** hiện trạng thái YOLO; **Cấu hình → AI** chỉnh model/conf/classes (hot-apply).
 
 ---
 

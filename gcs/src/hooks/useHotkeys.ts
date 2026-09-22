@@ -44,11 +44,32 @@ export function useHotkeys() {
       if (k === "escape") send({ type: "track", action: "stop" });
       if (k === "1") {
         useStore.getState().setMainView("visible");
+        useStore.getState().setThermalSolo(false);
+        useStore.getState().setLayout({ showPip: true });
         send({ type: "view", main: "visible" });
       }
       if (k === "2") {
         useStore.getState().setMainView("thermal");
+        useStore.getState().setThermalSolo(false);
         send({ type: "view", main: "thermal" });
+      }
+      if (k === "3") {
+        useStore.getState().setMainView("thermal");
+        useStore.getState().setThermalSolo(true);
+        send({ type: "view", main: "thermal" });
+      }
+      if (k === "0") {
+        const { layout, mainView, setMainView, setLayout, setThermalSolo } = useStore.getState();
+        if (mainView === "thermal" || layout.showPip) {
+          setLayout({ showPip: false });
+          setThermalSolo(false);
+          if (mainView === "thermal") {
+            setMainView("visible");
+            send({ type: "view", main: "visible" });
+          }
+        } else {
+          setLayout({ showPip: true });
+        }
       }
 
       held.add(k);

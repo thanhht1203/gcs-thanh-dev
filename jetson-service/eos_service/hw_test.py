@@ -16,6 +16,7 @@ Chạy trên Jetson (hoặc Windows lab) — nên tạm dừng service trước 
   python -m eos_service.hw_test laser
   python -m eos_service.hw_test ptz
   python -m eos_service.hw_test gps
+  python -m eos_service.hw_test ai                 # load YOLOv8 (+ infer thử)
   python -m eos_service.hw_test                    # tất cả
   python -m eos_service.hw_test --config config.yaml cameras visca
 
@@ -39,7 +40,7 @@ from .ptz.controller import PtzController
 from .sensors.devices import GpsCompass, LaserRangefinder
 
 
-MODULES = ("ports", "cameras", "visca", "satis", "laser", "ptz", "gps")
+MODULES = ("ports", "cameras", "visca", "satis", "laser", "ptz", "gps", "ai")
 
 
 def _ok(msg: str) -> None:
@@ -268,6 +269,32 @@ def test_gps(settings) -> bool:
         nav.close()
 
 
+def test_ai(settings) -> bool:
+    print("\n== ai (YOLO) ==")
+    cfg = settings.ai
+    _info(f"model={cfg.model} device={cfg.device} conf={cfg.conf} imgsz={cfg.imgsz} use_ultralytics={cfg.use_ultralytics}")
+    if not cfg.use_ultralytics:
+        _fail("use_ultralytics=false — bật trong config.yaml")
+        return False
+    from .ai.detector import Detector
+    import numpy as np
+
+    # Force load even if service config has sim:true
+    ctrl = Detector(cfg, sim=False)
+    try:
+        if not ctrl.ok or ctrl.model is None:
+            _fail(f"Không load được model {cfg.model} (cài requirements-jetson.txt / tải weights)")
+            return False
+        _ok(f"Loaded {cfg.model}")
+        frame = np.zeros((480, 640, 3), dtype=np.uint8)
+        dets = ctrl.infer(frame, None)
+        _ok(f"infer OK — {len(dets)} detections trên frame trống (bình thường)")
+        return True
+    except Exception as exc:
+        _fail(str(exc))
+        return False
+
+
 HANDLERS = {
     "ports": test_ports,
     "cameras": test_cameras,
@@ -276,6 +303,7 @@ HANDLERS = {
     "laser": test_laser,
     "ptz": test_ptz,
     "gps": test_gps,
+    "ai": test_ai,
 }
 
 

@@ -45,6 +45,8 @@ export type Telemetry = {
   detect_on: boolean;
   track_on: boolean;
   track_id: number | null;
+  ai_ok?: boolean;
+  ai_model?: string | null;
   roi: number[] | null;
   recording: boolean;
   detections: Detection[];
@@ -75,6 +77,8 @@ export const emptyTelemetry = (): Telemetry => ({
   detect_on: true,
   track_on: false,
   track_id: null,
+  ai_ok: false,
+  ai_model: null,
   roi: null,
   recording: false,
   detections: [],

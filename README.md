@@ -87,11 +87,12 @@ cd ~/eo-control/jetson-service
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
-# AI (tuỳ chọn)
+# AI YOLOv8n (Orin Nano)
 pip install -r requirements-jetson.txt
 python -c "from ultralytics import YOLO; YOLO('yolov8n.pt')"
+# hoặc từ PC: py -3 scripts/setup-jetson-ai.py  /  py -3 scripts/deploy-jetson.py --ai
 
-# Sửa config.yaml cho đúng cổng video/UART
+# Sửa config.yaml cho đúng cổng video/UART (sim: false)
 python -m eos_service --config config.yaml
 ```
 
@@ -261,4 +262,4 @@ HTTP phụ: `GET /health`, `GET/PUT /config`, `GET /snapshot/visible|thermal`, `
 | Camera đen / NO FRAME | `hw_test ports` + `cameras --preview`; đúng `device`/`backend` trong config |
 | Zoom không chạy | Đúng `visca.port` / `satis.port` (UART, không phải `/dev/video*`); `hw_test visca` / `satis` |
 | Serial fail → sim | Cổng đang bị `eo-service` chiếm — `systemctl stop` trước khi test |
-| AI không detect | Cài `requirements-jetson.txt`, có file `yolov8n.pt` |
+| AI không detect | `py -3 scripts/setup-jetson-ai.py`; health `ai_ok:true`; `hw_test ai`; GCS panel hiện YOLO |
