@@ -53,14 +53,20 @@ export function CameraPanel() {
         </button>
         <select
           value={cam.quality}
-          onChange={(e) => send({ type: "camera", quality: e.target.value, fps: e.target.value === "1080p" ? 10 : 15 })}
+          onChange={(e) =>
+            send({
+              type: "camera",
+              quality: e.target.value,
+              fps: e.target.value === "1080p" ? 60 : 30,
+            })
+          }
         >
-          <option value="1080p">Full HD 1080p</option>
+          <option value="1080p">Full HD 1080p 60fps</option>
           <option value="720p">HD 720p</option>
           <option value="480p">480p</option>
         </select>
       </div>
-      <p className="hint">1080p giảm fps trên Jetson để giữ AI. +/- zoom.</p>
+      <p className="hint">Ảnh thường mặc định 1080p @ 60 fps. +/- zoom.</p>
     </section>
   );
 }

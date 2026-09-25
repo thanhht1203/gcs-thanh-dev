@@ -61,7 +61,7 @@ class Engine:
         self.config_path = Path(config_path) if config_path else Path("config.yaml")
         self.webcam = webcam
         self.state = SystemState(sim=settings.sim)
-        self.state.camera.quality = "720p" if settings.sim else "1080p"
+        self.state.camera.quality = "1080p"
         self.state.camera.fps = settings.cameras.visible.fps
         self.world = SimWorld(height_m=settings.platform.height_m) if settings.sim else None
         self.cameras = CameraHub(settings, self.world, webcam=webcam)
@@ -286,6 +286,8 @@ class Engine:
 
                 self.cameras.world = self.world
                 self.cameras.reconfigure(new_settings, webcam=self.webcam)
+                self.state.camera.quality = "1080p"
+                self.state.camera.fps = new_settings.cameras.visible.fps
                 self.ptz.reconfigure(new_settings.ptz, new_settings.sim)
                 self.laser.reconfigure(new_settings.laser, new_settings.sim)
                 self.satis.reconfigure(new_settings.satis, new_settings.sim)

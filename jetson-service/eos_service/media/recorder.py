@@ -21,7 +21,7 @@ class Recorder:
         cv2.imwrite(str(path), frame)
         return str(path)
 
-    def start(self, frame: np.ndarray, fps: int = 15) -> str:
+    def start(self, frame: np.ndarray, fps: int = 60) -> str:
         self.stop()
         h, w = frame.shape[:2]
         name = datetime.now().strftime("rec_%Y%m%d_%H%M%S.mp4")

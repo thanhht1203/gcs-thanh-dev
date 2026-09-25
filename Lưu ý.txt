@@ -1,0 +1,2 @@
+- Cấu hình lại camera (full HD, 60 FPS)
+- Thiết kế lại màn hình

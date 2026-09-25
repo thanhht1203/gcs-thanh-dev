@@ -16,9 +16,9 @@ cameras:
   visible:
     # FCB-EV9520L — HDMI/USB capture. MJPG neu select() timeout o /dev/video0
     device: /dev/video0
-    width: 1280
-    height: 720
-    fps: 15
+    width: 1920
+    height: 1080
+    fps: 60
     backend: v4l2
     fourcc: MJPG
   thermal:

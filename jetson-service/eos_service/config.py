@@ -39,7 +39,7 @@ class CamDevice(BaseModel):
 class CamerasCfg(BaseModel):
     visible: CamDevice = Field(
         default_factory=lambda: CamDevice(
-            device="/dev/video0", width=1280, height=720, backend="v4l2", colormap=False
+            device="/dev/video0", width=1920, height=1080, fps=60, backend="v4l2", colormap=False
         )
     )
     thermal: CamDevice = Field(

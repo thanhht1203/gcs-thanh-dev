@@ -46,8 +46,8 @@ class CameraState:
     autofocus: bool = True
     brightness: int = 50
     contrast: int = 50
-    quality: str = "720p"
-    fps: int = 15
+    quality: str = "1080p"
+    fps: int = 60
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
